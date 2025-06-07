@@ -109,6 +109,17 @@ uvicorn backend.app.main:app --reload   # バックエンド（FastAPI）
 pytest backend/tests/         # バックエンドテスト
 ```
 
+## Docker Compose を使った起動
+
+Docker が利用できる環境であれば、フロントエンドとバックエンドをまとめて起動できます。
+
+```bash
+docker-compose up --build
+```
+
+- Frontend: <http://localhost:3000>
+- Backend: <http://localhost:8000>
+
 ---
 
 ## テスト
