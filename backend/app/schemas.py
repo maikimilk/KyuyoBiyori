@@ -31,5 +31,6 @@ class Payslip(PayslipBase):
     id: int
     items: list[PayslipItem] = []
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True,
+    }
