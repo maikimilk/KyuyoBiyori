@@ -5,12 +5,17 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from sqlalchemy import func
 from collections import defaultdict
+import logging
 import re
 try:
     from google.cloud import vision  # type: ignore
     _vision_available = True
 except Exception:  # pragma: no cover - library optional during tests
     _vision_available = False
+
+logger = logging.getLogger(__name__)
+if not _vision_available:
+    logger.warning("google.cloud.vision not available, OCR disabled")
 
 from ..schemas import (
     PayslipCreate,
@@ -40,11 +45,14 @@ def _extract_text_with_vision(content: bytes) -> str:
     if not _vision_available:
         return ''
 
+    logger.info("Invoking Google Cloud Vision API")
     client = vision.ImageAnnotatorClient()
     image = vision.Image(content=content)
     response = client.text_detection(image=image)
     if response.error.message:
+        logger.error("Vision API error: %s", response.error.message)
         raise RuntimeError(response.error.message)
+    logger.info("Vision API text detection completed")
     return response.full_text_annotation.text or ''
 
 
@@ -96,9 +104,12 @@ def _parse_file(content: bytes) -> dict:
     if not parsed['items'] and _vision_available:
         try:
             vision_text = _extract_text_with_vision(content)
-        except Exception:
+        except Exception as e:
+            logger.error("Vision OCR failed: %s", e)
             vision_text = ''
         parsed = _parse_text(vision_text)
+    elif not parsed['items']:
+        logger.info("Vision API unavailable; OCR skipped")
 
     parsed['items'] = _categorize_items(parsed['items'])
     return parsed

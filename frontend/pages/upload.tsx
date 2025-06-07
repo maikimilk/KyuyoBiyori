@@ -10,7 +10,8 @@ import {
   Progress,
   SimpleGrid,
   Stack,
-  Text
+  Text,
+  useToast
 } from '@chakra-ui/react';
 
 export default function Upload() {
@@ -19,6 +20,7 @@ export default function Upload() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const toast = useToast();
 
   const upload = async (f: File) => {
     setProgress(0);
@@ -33,10 +35,12 @@ export default function Upload() {
         setPreview(data);
         setStatus('解析完了');
       } else {
+        toast({ title: '通信エラー', status: 'error' });
         setError('アップロード失敗');
         setStatus('');
       }
     } catch (e) {
+      toast({ title: '通信エラー', status: 'error' });
       setError('アップロード失敗');
       setStatus('');
     } finally {
@@ -47,6 +51,14 @@ export default function Upload() {
   const handleFile = (f: File) => {
     setFile(f);
     upload(f);
+  };
+
+  const handleCancel = () => {
+    setFile(null);
+    setPreview(null);
+    setProgress(0);
+    setStatus('');
+    setError('');
   };
 
   const handleSave = async () => {
@@ -70,7 +82,10 @@ export default function Upload() {
     <Layout>
       <Stack spacing={4}>
         <Heading as="h1" size="lg">明細アップロード</Heading>
-        <Input type="file" onChange={e => e.target.files && handleFile(e.target.files[0])} />
+        <Flex gap={2} alignItems="center">
+          <Input type="file" onChange={e => e.target.files && handleFile(e.target.files[0])} />
+          {file && <Button onClick={handleCancel}>取消</Button>}
+        </Flex>
         {progress > 0 && <Progress value={progress} />}
         {status && <Text>{status}</Text>}
         {error && <Text color="red.500">{error}</Text>}

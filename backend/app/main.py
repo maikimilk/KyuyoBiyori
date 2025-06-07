@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from app.routers import payslip, settings
 from app.database import engine
 from app import models
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 models.Base.metadata.create_all(bind=engine)
 
