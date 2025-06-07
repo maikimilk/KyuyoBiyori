@@ -116,6 +116,21 @@ def _parse_file(content: bytes) -> dict:
     return parsed
 
 
+def _parse_date(date_str: str | None) -> date | None:
+    """Parse date string which may be YYYY-MM or YYYY-MM-DD."""
+    if not date_str:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m"):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            if fmt == "%Y-%m":
+                dt = dt.replace(day=1)
+            return dt.date()
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail="Invalid date format")
+
+
 @router.post('/upload', response_model=PayslipPreview)
 async def upload_payslip(
     file: UploadFile = File(...),
@@ -142,7 +157,7 @@ def save_payslip(
     data: PayslipCreate,
     db: Session = Depends(get_db)
 ):
-    date_obj = datetime.strptime(data.date, "%Y-%m-%d").date() if data.date else None
+    date_obj = _parse_date(data.date)
     payslip = models.Payslip(
         filename=data.filename,
         date=date_obj,
@@ -212,7 +227,7 @@ def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
     if not payslip:
         raise HTTPException(status_code=404, detail='Not found')
     payslip.filename = data.filename
-    payslip.date = datetime.strptime(data.date, "%Y-%m-%d").date() if data.date else None
+    payslip.date = _parse_date(data.date)
     payslip.type = data.type
     payslip.gross_amount = data.gross_amount
     payslip.net_amount = data.net_amount
