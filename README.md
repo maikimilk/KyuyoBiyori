@@ -120,6 +120,15 @@ docker-compose up --build
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
 
+フロントエンドからバックエンド API へのアクセスにはリバースプロキシを利用しており
+`API_HOST` 環境変数で接続先を指定できます。Docker Compose 起動時は自動で
+`http://backend:8000` が設定されます。ローカルで個別に起動する場合は次のように
+環境変数を指定してフロントエンドを起動してください。
+
+```bash
+API_HOST=http://localhost:8000 npm run dev
+```
+
 ---
 
 ## テスト
