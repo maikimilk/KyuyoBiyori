@@ -5,12 +5,17 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from sqlalchemy import func
 from collections import defaultdict
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 try:
     from google.cloud import vision  # type: ignore
     _vision_available = True
-except Exception:  # pragma: no cover - library optional during tests
+    logger.info("Google Cloud Vision API client loaded")
+except Exception as e:  # pragma: no cover - library optional during tests
     _vision_available = False
+    logger.warning("Google Cloud Vision API not available: %s", e)
 
 from ..schemas import (
     PayslipCreate,
@@ -38,14 +43,19 @@ _deduction_keywords = ['税', '保険', '控除', '料', '差引']
 def _extract_text_with_vision(content: bytes) -> str:
     """Extract text using Google Cloud Vision API if available."""
     if not _vision_available:
+        logger.debug("Vision API not available; skipping OCR")
         return ''
 
+    logger.info("Sending image to Google Cloud Vision API")
     client = vision.ImageAnnotatorClient()
     image = vision.Image(content=content)
     response = client.text_detection(image=image)
     if response.error.message:
+        logger.error("Vision API error: %s", response.error.message)
         raise RuntimeError(response.error.message)
-    return response.full_text_annotation.text or ''
+    text = response.full_text_annotation.text or ''
+    logger.info("Vision API returned %d characters", len(text))
+    return text
 
 
 def _parse_text(text: str) -> dict:
@@ -91,15 +101,17 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
 
 def _parse_file(content: bytes) -> dict:
     """Parse uploaded file using OCR when necessary."""
+    logger.debug("Parsing uploaded file")
     text = content.decode('utf-8', errors='ignore')
     parsed = _parse_text(text)
     if not parsed['items'] and _vision_available:
         try:
             vision_text = _extract_text_with_vision(content)
-        except Exception:
+        except Exception as e:
+            logger.error("Vision API request failed: %s", e)
             vision_text = ''
         parsed = _parse_text(vision_text)
-
+    
     parsed['items'] = _categorize_items(parsed['items'])
     return parsed
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Layout from '../components/Layout';
 import {
   Box,
@@ -11,6 +11,7 @@ import {
   SimpleGrid,
   Stack,
   Text
+  , useToast
 } from '@chakra-ui/react';
 
 export default function Upload() {
@@ -19,6 +20,8 @@ export default function Upload() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const toast = useToast();
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const upload = async (f: File) => {
     setProgress(0);
@@ -34,10 +37,12 @@ export default function Upload() {
         setStatus('解析完了');
       } else {
         setError('アップロード失敗');
+        toast({ status: 'error', title: '通信エラー', description: 'アップロード失敗', isClosable: true });
         setStatus('');
       }
     } catch (e) {
       setError('アップロード失敗');
+      toast({ status: 'error', title: '通信エラー', description: 'アップロード失敗', isClosable: true });
       setStatus('');
     } finally {
       setProgress(100);
@@ -47,6 +52,15 @@ export default function Upload() {
   const handleFile = (f: File) => {
     setFile(f);
     upload(f);
+  };
+
+  const handleCancel = () => {
+    setFile(null);
+    setPreview(null);
+    setError('');
+    setStatus('');
+    setProgress(0);
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   const handleSave = async () => {
@@ -70,7 +84,10 @@ export default function Upload() {
     <Layout>
       <Stack spacing={4}>
         <Heading as="h1" size="lg">明細アップロード</Heading>
-        <Input type="file" onChange={e => e.target.files && handleFile(e.target.files[0])} />
+        <Flex gap={2} align="center">
+          <Input type="file" ref={inputRef} onChange={e => e.target.files && handleFile(e.target.files[0])} />
+          <Button onClick={handleCancel}>取り消し</Button>
+        </Flex>
         {progress > 0 && <Progress value={progress} />}
         {status && <Text>{status}</Text>}
         {error && <Text color="red.500">{error}</Text>}
