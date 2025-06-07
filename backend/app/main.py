@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from .routers import payslip, settings
-from .database import engine
-from . import models
+from app.routers import payslip, settings
+from app.database import engine
+from app import models
 
 models.Base.metadata.create_all(bind=engine)
 
