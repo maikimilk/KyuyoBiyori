@@ -68,3 +68,23 @@ def test_summary_and_stats():
 
     stats = client.get('/api/payslip/stats?target=net').json()
     assert this_month.strftime('%Y-%m') in stats['labels']
+
+
+def test_filter_and_delete():
+    preview = client.post('/api/payslip/upload', files={'file': ('f.txt', b'gross:100\nnet:90')}).json()
+    save = client.post('/api/payslip/save', json={
+        'filename': preview['filename'],
+        'date': '2023-06-01',
+        'type': 'bonus',
+        'gross_amount': preview['gross_amount'],
+        'net_amount': preview['net_amount'],
+        'deduction_amount': preview['deduction_amount']
+    }).json()
+
+    filtered = client.get('/api/payslip/list?year=2023&kind=bonus').json()
+    assert any(p['id'] == save['id'] for p in filtered)
+
+    del_res = client.delete(f'/api/payslip/delete?payslip_id={save["id"]}')
+    assert del_res.status_code == 200
+    remaining = client.get('/api/payslip/list?year=2023&kind=bonus').json()
+    assert all(p['id'] != save['id'] for p in remaining)
