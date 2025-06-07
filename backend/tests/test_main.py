@@ -152,3 +152,28 @@ def test_stats_filters_and_breakdown():
 
     breakdown = client.get('/api/payslip/breakdown?year=2024&category=deduction').json()
     assert 'tax' in breakdown['labels']
+
+
+def test_export_and_settings_update():
+    # create a payslip for export
+    preview = client.post('/api/payslip/upload', files={'file': ('exp.txt', b'gross:50\nnet:40\ndeduction:10')}).json()
+    client.post('/api/payslip/save', json={
+        'filename': preview['filename'],
+        'date': '2024-06-01',
+        'type': 'salary',
+        'gross_amount': preview['gross_amount'],
+        'net_amount': preview['net_amount'],
+        'deduction_amount': preview['deduction_amount']
+    })
+
+    res_json = client.get('/api/payslip/export?format=json')
+    assert res_json.status_code == 200
+    assert isinstance(res_json.json(), list)
+
+    res_csv = client.get('/api/payslip/export?format=csv')
+    assert res_csv.status_code == 200
+    assert 'text/csv' in res_csv.headers['content-type']
+
+    upd = client.post('/api/settings/update', json={'theme_color': '#ffffff'})
+    assert upd.status_code == 200
+    assert upd.json()['theme_color'] == '#ffffff'

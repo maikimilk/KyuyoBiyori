@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -200,6 +201,30 @@ def payslip_stats(period: str = 'monthly', target: str = 'net', kind: str | None
     labels = sorted(grouped.keys())
     data = [grouped[k] for k in labels]
     return {'labels': labels, 'data': data}
+
+@router.get('/export')
+def export_payslips(format: str = 'csv', db: Session = Depends(get_db)):
+    payslips = db.query(models.Payslip).all()
+    records = [
+        {
+            'id': p.id,
+            'date': p.date.isoformat() if p.date else '',
+            'type': p.type,
+            'gross_amount': p.gross_amount,
+            'net_amount': p.net_amount,
+            'deduction_amount': p.deduction_amount,
+        }
+        for p in payslips
+    ]
+    if format == 'json':
+        return records
+    header = ['id','date','type','gross_amount','net_amount','deduction_amount']
+    def iter_csv():
+        yield ','.join(header) + '\n'
+        for r in records:
+            row = [str(r[h]) if r[h] is not None else '' for h in header]
+            yield ','.join(row) + '\n'
+    return StreamingResponse(iter_csv(), media_type='text/csv', headers={'Content-Disposition': 'attachment; filename=payslips.csv'})
 
 @router.get('/breakdown')
 def payslip_breakdown(year: int | None = None, category: str = 'deduction', db: Session = Depends(get_db)):
