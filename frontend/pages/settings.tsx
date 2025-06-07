@@ -19,7 +19,7 @@ import {
   Link,
   useColorMode,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
+import { FaPlus, FaTrash } from 'react-icons/fa';
 
 interface Item {
   id: number;
@@ -125,13 +125,13 @@ export default function Settings() {
                     <Switch isChecked={it.enabled} onChange={e => updateItem(it.id, 'enabled', e.target.checked)} />
                   </Td>
                   <Td>
-                    <IconButton aria-label="delete" icon={<DeleteIcon />} size="sm" onClick={() => removeItem(it.id)} />
+                    <IconButton aria-label="delete" icon={<FaTrash />} size="sm" onClick={() => removeItem(it.id)} />
                   </Td>
                 </Tr>
               ))}
             </Tbody>
           </Table>
-          <Button leftIcon={<AddIcon />} size="sm" mt={2} onClick={addItem}>追加</Button>
+          <Button leftIcon={<FaPlus />} size="sm" mt={2} onClick={addItem}>追加</Button>
         </Box>
 
         <Box>

@@ -23,7 +23,7 @@ import {
   ModalBody,
   ModalFooter,
 } from '@chakra-ui/react';
-import { DeleteIcon, CopyIcon, EditIcon, ViewIcon } from '@chakra-ui/icons';
+import { FaTrash, FaCopy, FaEdit, FaEye } from 'react-icons/fa';
 import Link from 'next/link';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -114,10 +114,10 @@ export default function History() {
                 <Td isNumeric>{p.deduction_amount?.toLocaleString()}</Td>
                 <Td>
                   <Stack direction="row" spacing={1}>
-                    <IconButton as={Link} href={`/payslip/${p.id}`} aria-label="detail" icon={<ViewIcon />} size="sm" />
-                    <IconButton as={Link} href={`/payslip/${p.id}?edit=1`} aria-label="edit" icon={<EditIcon />} size="sm" />
-                    <IconButton onClick={() => askDelete(p.id)} aria-label="delete" icon={<DeleteIcon />} size="sm" />
-                    <IconButton as={Link} href={`/upload?copy=${p.id}`} aria-label="copy" icon={<CopyIcon />} size="sm" />
+                    <IconButton as={Link} href={`/payslip/${p.id}`} aria-label="detail" icon={<FaEye />} size="sm" />
+                    <IconButton as={Link} href={`/payslip/${p.id}?edit=1`} aria-label="edit" icon={<FaEdit />} size="sm" />
+                    <IconButton onClick={() => askDelete(p.id)} aria-label="delete" icon={<FaTrash />} size="sm" />
+                    <IconButton as={Link} href={`/upload?copy=${p.id}`} aria-label="copy" icon={<FaCopy />} size="sm" />
                   </Stack>
                 </Td>
               </Tr>
