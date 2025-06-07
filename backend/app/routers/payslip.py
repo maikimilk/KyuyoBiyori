@@ -5,7 +5,21 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from sqlalchemy import func
 from collections import defaultdict
-from ..schemas import PayslipCreate, PayslipUpdate, Payslip, PayslipPreview, PayslipItem, ReparseRequest
+import re
+try:
+    from google.cloud import vision  # type: ignore
+    _vision_available = True
+except Exception:  # pragma: no cover - library optional during tests
+    _vision_available = False
+
+from ..schemas import (
+    PayslipCreate,
+    PayslipUpdate,
+    Payslip,
+    PayslipPreview,
+    PayslipItem,
+    ReparseRequest,
+)
 from .. import models, database
 
 router = APIRouter()
@@ -18,25 +32,45 @@ def get_db():
     finally:
         db.close()
 
-def _parse_file(content: bytes) -> dict:
-    """Very naive parser used as a stub for OCR."""
-    text = content.decode('utf-8', errors='ignore')
+_deduction_keywords = ['税', '保険', '控除', '料', '差引']
+
+
+def _extract_text_with_vision(content: bytes) -> str:
+    """Extract text using Google Cloud Vision API if available."""
+    if not _vision_available:
+        return ''
+
+    client = vision.ImageAnnotatorClient()
+    image = vision.Image(content=content)
+    response = client.text_detection(image=image)
+    if response.error.message:
+        raise RuntimeError(response.error.message)
+    return response.full_text_annotation.text or ''
+
+
+def _parse_text(text: str) -> dict:
     gross = net = deduction = None
     items: list[PayslipItem] = []
+    item_pattern = re.compile(r"([\w\u3000-\u30FF\u4E00-\u9FAF]+)[:\s]+(-?\d+)")
+
     for line in text.splitlines():
-        if ':' in line:
-            name, value = line.split(':', 1)
-            try:
-                amount = int(value.strip())
-            except ValueError:
-                continue
-            items.append(PayslipItem(name=name.strip(), amount=amount))
-            if name.strip() == 'gross':
-                gross = amount
-            if name.strip() == 'net':
-                net = amount
-            if name.strip() == 'deduction':
-                deduction = amount
+        m = item_pattern.search(line)
+        if not m:
+            continue
+        name = m.group(1).strip()
+        try:
+            amount = int(m.group(2))
+        except ValueError:
+            continue
+
+        items.append(PayslipItem(name=name, amount=amount))
+        if name in ('gross', '総支給', '支給総額'):
+            gross = amount
+        if name in ('net', '手取り'):
+            net = amount
+        if name in ('deduction', '控除合計'):
+            deduction = amount
+
     return {
         'items': items,
         'gross_amount': gross,
@@ -45,16 +79,45 @@ def _parse_file(content: bytes) -> dict:
     }
 
 
+def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
+    categorized: list[PayslipItem] = []
+    for it in items:
+        category = 'payment'
+        if it.amount < 0 or any(k in it.name for k in _deduction_keywords):
+            category = 'deduction'
+        categorized.append(PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category))
+    return categorized
+
+
+def _parse_file(content: bytes) -> dict:
+    """Parse uploaded file using OCR when necessary."""
+    text = content.decode('utf-8', errors='ignore')
+    parsed = _parse_text(text)
+    if not parsed['items'] and _vision_available:
+        try:
+            vision_text = _extract_text_with_vision(content)
+        except Exception:
+            vision_text = ''
+        parsed = _parse_text(vision_text)
+
+    parsed['items'] = _categorize_items(parsed['items'])
+    return parsed
+
+
 @router.post('/upload', response_model=PayslipPreview)
 async def upload_payslip(
     file: UploadFile = File(...),
 ):
     content = await file.read()
     parsed = _parse_file(content)
+    slip_type = None
+    text_blob = '\n'.join([it.name for it in parsed['items']])
+    if '賞与' in text_blob or 'bonus' in text_blob.lower():
+        slip_type = 'bonus'
     return PayslipPreview(
         filename=file.filename,
         date=None,
-        type=None,
+        type=slip_type,
         gross_amount=parsed.get('gross_amount'),
         net_amount=parsed.get('net_amount'),
         deduction_amount=parsed.get('deduction_amount'),
