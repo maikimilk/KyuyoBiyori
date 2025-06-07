@@ -2,6 +2,13 @@ from fastapi import FastAPI
 from app.routers import payslip, settings
 from app.database import engine
 from app import models
+import logging
+
+# Ensure application logs show informative messages
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s"
+)
 
 models.Base.metadata.create_all(bind=engine)
 
