@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import Layout from '../components/Layout';
+import { Heading, List, ListItem, Link } from '@chakra-ui/react';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -8,14 +9,14 @@ export default function History() {
 
   return (
     <Layout>
-      <h1>明細一覧</h1>
-      <ul>
+      <Heading as="h1" size="lg" mb={4}>明細一覧</Heading>
+      <List spacing={2}>
         {data?.map((p: any) => (
-          <li key={p.id}>
-            <a href={`/payslip/${p.id}`}>{p.filename}</a>
-          </li>
+          <ListItem key={p.id}>
+            <Link href={`/payslip/${p.id}`} color="teal.500">{p.filename}</Link>
+          </ListItem>
         ))}
-      </ul>
+      </List>
     </Layout>
   );
 }

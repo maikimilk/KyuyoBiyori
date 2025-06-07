@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Layout from '../components/Layout';
+import { Heading, Input, Button, Text, Stack } from '@chakra-ui/react';
 
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
@@ -19,10 +20,12 @@ export default function Upload() {
 
   return (
     <Layout>
-      <h1>明細アップロード</h1>
-      <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
-      <button onClick={handleUpload}>送信</button>
-      <p>{message}</p>
+      <Stack spacing={4}>
+        <Heading as="h1" size="lg">明細アップロード</Heading>
+        <Input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
+        <Button onClick={handleUpload} colorScheme="teal">送信</Button>
+        {message && <Text>{message}</Text>}
+      </Stack>
     </Layout>
   );
 }

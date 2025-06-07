@@ -1,10 +1,11 @@
 import Layout from '../components/Layout';
+import { Heading, Text } from '@chakra-ui/react';
 
 export default function Settings() {
   return (
     <Layout>
-      <h1>設定</h1>
-      {/* 設定項目は将来追加 */}
+      <Heading as="h1" size="lg" mb={4}>設定</Heading>
+      <Text color="gray.500">設定項目は今後追加予定です。</Text>
     </Layout>
   );
 }
