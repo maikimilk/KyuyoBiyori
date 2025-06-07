@@ -1,4 +1,3 @@
-````markdown
 # 給与・賞与明細ビジュアライザーWebアプリ
 
 ## 概要
@@ -18,6 +17,16 @@
 - **手動修正UI**で誤認識や追加項目も柔軟対応
 - **テスト駆動開発**（TDD）スタイル採用
 - **SQLite**を初期DBに、**将来はPostgreSQL等への移行も容易な設計**
+
+## ディレクトリ構成
+
+```text
+backend/    # FastAPI アプリケーション
+  app/      # API実装
+  tests/    # pytest テスト
+frontend/   # Next.js フロントエンド
+```
+
 
 ---
 
@@ -86,17 +95,17 @@ NEXT_PUBLIC_GCLOUD_API_KEY=xxxxx
 
 # 3. 依存インストール
 npm install           # フロントエンド
-pip install -r requirements.txt    # バックエンド
+pip install -r backend/requirements.txt    # バックエンド
 
 # 4. 開発サーバ起動
 npm run dev           # フロントエンド
-uvicorn app.main:app --reload   # バックエンド（FastAPI）
+uvicorn backend.app.main:app --reload   # バックエンド（FastAPI）
 
 # 5. ブラウザで http://localhost:3000 へアクセス
 
 # 6. テスト実行例
-pytest tests/         # バックエンドテスト
-````
+pytest backend/tests/         # バックエンドテスト
+```
 
 ---
 
@@ -210,4 +219,3 @@ MIT
 **給与明細を"楽しく可視化"して人生設計をサポート！
 開発メンバー・フィードバック・設計追記も歓迎です。**
 
-```
