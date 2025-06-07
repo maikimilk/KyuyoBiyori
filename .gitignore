@@ -6,3 +6,4 @@ yarn.lock
 .next/
 test.db
 .env.local
+gcp_key.json
