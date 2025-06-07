@@ -64,15 +64,24 @@ def _extract_text_with_vision(content: bytes) -> str:
 def _parse_text(text: str) -> dict:
     gross = net = deduction = None
     items: list[PayslipItem] = []
-    item_pattern = re.compile(r"([\w\u3000-\u30FF\u4E00-\u9FAF]+)[:\s]+(-?\d+)")
+    item_pattern = re.compile(
+        r"([\w\u3000-\u30FF\u4E00-\u9FAF]+)[\s:：]+([\-−△▲]?\d[\d,]*)"
+    )
 
     for line in text.splitlines():
         m = item_pattern.search(line)
         if not m:
             continue
         name = m.group(1).strip()
+        raw_amount = (
+            m.group(2)
+            .replace(",", "")
+            .replace("−", "-")
+            .replace("△", "-")
+            .replace("▲", "-")
+        )
         try:
-            amount = int(m.group(2))
+            amount = int(raw_amount)
         except ValueError:
             continue
 
