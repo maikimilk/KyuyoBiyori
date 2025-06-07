@@ -175,8 +175,11 @@ def payslip_summary(db: Session = Depends(get_db)):
     }
 
 @router.get('/stats')
-def payslip_stats(period: str = 'monthly', target: str = 'net', db: Session = Depends(get_db)):
-    records = db.query(models.Payslip).all()
+def payslip_stats(period: str = 'monthly', target: str = 'net', kind: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.Payslip)
+    if kind:
+        query = query.filter(models.Payslip.type == kind)
+    records = query.all()
     grouped = defaultdict(int)
     for p in records:
         if not p.date:
@@ -197,6 +200,21 @@ def payslip_stats(period: str = 'monthly', target: str = 'net', db: Session = De
     labels = sorted(grouped.keys())
     data = [grouped[k] for k in labels]
     return {'labels': labels, 'data': data}
+
+@router.get('/breakdown')
+def payslip_breakdown(year: int | None = None, category: str = 'deduction', db: Session = Depends(get_db)):
+    query = db.query(models.PayslipItem.name, func.sum(models.PayslipItem.amount)).join(models.Payslip)
+    if year:
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        query = query.filter(models.Payslip.date >= start, models.Payslip.date <= end)
+    if category:
+        query = query.filter(models.PayslipItem.category == category)
+    query = query.group_by(models.PayslipItem.name)
+    results = query.all()
+    labels = [r[0] for r in results]
+    data = [r[1] for r in results]
+    return { 'labels': labels, 'data': data }
 
 @router.get('/{payslip_id}', response_model=Payslip)
 def get_payslip(payslip_id: int, db: Session = Depends(get_db)):

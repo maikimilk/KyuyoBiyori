@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import useSWR from 'swr';
 import Layout from '../components/Layout';
 import { Heading, Stack, Stat, StatLabel, StatNumber, Tabs, TabList, TabPanels, Tab, TabPanel, ButtonGroup, Button, Text } from '@chakra-ui/react';
@@ -56,7 +56,7 @@ export default function Home() {
               <Button variant={period === 'monthly' ? 'solid' : 'outline'} onClick={() => setPeriod('monthly')}>月次</Button>
               <Button variant={period === 'yearly' ? 'solid' : 'outline'} onClick={() => setPeriod('yearly')}>年次</Button>
             </ButtonGroup>
-            <Tabs index={['net','gross','deduction'].indexOf(target)} onChange={(i) => setTarget(['net','gross','deduction'][i] as any)}>
+            <Tabs index={['net','gross','deduction'].indexOf(target)} onChange={(i) => setTarget(['net','gross','deduction'][i] as 'net' | 'gross' | 'deduction')}>
               <TabList>
                 <Tab>手取り</Tab>
                 <Tab>額面</Tab>

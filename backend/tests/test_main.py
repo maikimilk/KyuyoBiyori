@@ -120,3 +120,35 @@ def test_update_and_reparse():
 
     resp = client.post('/api/payslip/reparse', json={'items': detail['items']}).json()
     assert all('category' in it for it in resp)
+
+
+def test_stats_filters_and_breakdown():
+    # create two payslips with different types and items
+    p1 = client.post('/api/payslip/upload', files={'file': ('a.txt', b'gross:100\nnet:90\ndeduction:10')}).json()
+    p2 = client.post('/api/payslip/upload', files={'file': ('b.txt', b'gross:200\nnet:150\ndeduction:50')}).json()
+
+    client.post('/api/payslip/save', json={
+        'filename': p1['filename'],
+        'date': '2024-04-01',
+        'type': 'bonus',
+        'gross_amount': p1['gross_amount'],
+        'net_amount': p1['net_amount'],
+        'deduction_amount': p1['deduction_amount'],
+        'items': [{'name': 'tax', 'amount': -10, 'category': 'deduction'}]
+    })
+
+    client.post('/api/payslip/save', json={
+        'filename': p2['filename'],
+        'date': '2024-05-01',
+        'type': 'salary',
+        'gross_amount': p2['gross_amount'],
+        'net_amount': p2['net_amount'],
+        'deduction_amount': p2['deduction_amount'],
+        'items': [{'name': 'tax', 'amount': -20, 'category': 'deduction'}]
+    })
+
+    stats = client.get('/api/payslip/stats?period=yearly&target=gross&kind=bonus').json()
+    assert stats['data']
+
+    breakdown = client.get('/api/payslip/breakdown?year=2024&category=deduction').json()
+    assert 'tax' in breakdown['labels']
