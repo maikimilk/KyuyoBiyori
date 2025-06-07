@@ -72,6 +72,7 @@ export default function Home() {
         ) : (
           <Text color="gray.500">アップロードしてはじめよう！</Text>
         )
+        }
       </Stack>
     </Layout>
   );
