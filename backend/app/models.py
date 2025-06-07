@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
 Base = declarative_base()
@@ -15,3 +16,16 @@ class Payslip(Base):
     net_amount = Column(Integer, nullable=True)
     deduction_amount = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    items = relationship("PayslipItem", back_populates="payslip", cascade="all, delete-orphan")
+
+
+class PayslipItem(Base):
+    __tablename__ = 'payslip_items'
+
+    id = Column(Integer, primary_key=True, index=True)
+    payslip_id = Column(Integer, ForeignKey('payslips.id'))
+    name = Column(String, nullable=False)
+    amount = Column(Integer, nullable=False)
+    category = Column(String, nullable=True)
+
+    payslip = relationship("Payslip", back_populates="items")

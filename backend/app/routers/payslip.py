@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from sqlalchemy import func
 from collections import defaultdict
-from ..schemas import PayslipCreate, Payslip, PayslipPreview, PayslipItem
+from ..schemas import PayslipCreate, PayslipUpdate, Payslip, PayslipPreview, PayslipItem, ReparseRequest
 from .. import models, database
 
 router = APIRouter()
@@ -78,6 +78,16 @@ def save_payslip(
     db.add(payslip)
     db.commit()
     db.refresh(payslip)
+    for it in data.items:
+        item = models.PayslipItem(
+            name=it.name,
+            amount=it.amount,
+            category=it.category,
+            payslip_id=payslip.id,
+        )
+        db.add(item)
+    db.commit()
+    db.refresh(payslip)
     return payslip
 
 @router.get('/', response_model=list[Payslip])
@@ -109,6 +119,34 @@ def delete_payslip(payslip_id: int, db: Session = Depends(get_db)):
     db.delete(payslip)
     db.commit()
     return {'status': 'deleted'}
+
+
+@router.post('/reparse', response_model=list[PayslipItem])
+def reparse_payslip(data: ReparseRequest):
+    items = []
+    for it in data.items:
+        category = 'deduction' if it.amount < 0 else 'payment'
+        items.append(PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category))
+    return items
+
+
+@router.put('/update', response_model=Payslip)
+def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
+    payslip = db.query(models.Payslip).get(data.id)
+    if not payslip:
+        raise HTTPException(status_code=404, detail='Not found')
+    payslip.filename = data.filename
+    payslip.date = datetime.strptime(data.date, "%Y-%m-%d").date() if data.date else None
+    payslip.type = data.type
+    payslip.gross_amount = data.gross_amount
+    payslip.net_amount = data.net_amount
+    payslip.deduction_amount = data.deduction_amount
+    payslip.items.clear()
+    for it in data.items:
+        payslip.items.append(models.PayslipItem(name=it.name, amount=it.amount, category=it.category))
+    db.commit()
+    db.refresh(payslip)
+    return payslip
 
 @router.get('/summary')
 def payslip_summary(db: Session = Depends(get_db)):
