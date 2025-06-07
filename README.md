@@ -90,20 +90,22 @@ frontend/   # Next.js フロントエンド
 git clone https://github.com/your-repo/kintai-visualizer.git
 cd kintai-visualizer
 
-# 2. Google Cloud Vision APIキーを.env.localへ
+# 2. Python仮想環境（任意）
+python -m venv .venv
+source .venv/bin/activate
+
+# 3. Google Cloud Vision APIキーを.env.localへ
 NEXT_PUBLIC_GCLOUD_API_KEY=xxxxx
-
-# 3. 依存インストール
-npm install           # フロントエンド
-pip install -r backend/requirements.txt    # バックエンド
-
-# 4. 開発サーバ起動
+# 4. 依存インストール
+cd frontend && npm install && cd ..       # フロントエンド依存
+pip install -r backend/requirements.txt    # バックエンド依存
+# 5. 開発サーバ起動
 npm run dev           # フロントエンド
 uvicorn backend.app.main:app --reload   # バックエンド（FastAPI）
 
-# 5. ブラウザで http://localhost:3000 へアクセス
+# 6. ブラウザで http://localhost:3000 へアクセス
 
-# 6. テスト実行例
+# 7. テスト実行例
 pytest backend/tests/         # バックエンドテスト
 ```
 
@@ -202,7 +204,7 @@ type: "給与"
 
 ## 開発状況
 
-- フロントエンドに主要6ページの雛形を追加
+- フロントエンドをChakra UIベースで実装
 - FastAPIに明細アップロード・一覧取得APIを実装
 - pytestによる基本テストを整備
 
