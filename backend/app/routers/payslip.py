@@ -1,6 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date, datetime, timedelta
+from typing import Optional
+from sqlalchemy import func
 from collections import defaultdict
 from ..schemas import PayslipCreate, Payslip, PayslipPreview, PayslipItem
 from .. import models, database
@@ -81,6 +83,32 @@ def save_payslip(
 @router.get('/', response_model=list[Payslip])
 def list_payslips(db: Session = Depends(get_db)):
     return db.query(models.Payslip).all()
+
+
+@router.get('/list', response_model=list[Payslip])
+def list_filtered_payslips(
+    year: Optional[int] = None,
+    kind: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.Payslip)
+    if year:
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        query = query.filter(models.Payslip.date >= start, models.Payslip.date <= end)
+    if kind:
+        query = query.filter(models.Payslip.type == kind)
+    return query.all()
+
+
+@router.delete('/delete')
+def delete_payslip(payslip_id: int, db: Session = Depends(get_db)):
+    payslip = db.query(models.Payslip).get(payslip_id)
+    if not payslip:
+        raise HTTPException(status_code=404, detail='Not found')
+    db.delete(payslip)
+    db.commit()
+    return {'status': 'deleted'}
 
 @router.get('/summary')
 def payslip_summary(db: Session = Depends(get_db)):
