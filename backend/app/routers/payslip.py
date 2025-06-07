@@ -9,6 +9,9 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
+# Ensure INFO level logs are emitted even when root logger level is higher
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
 try:
     from google.cloud import vision  # type: ignore
     _vision_available = True
@@ -109,6 +112,8 @@ def _parse_file(content: bytes) -> dict:
             vision_text = _extract_text_with_vision(content)
         except Exception as e:
             logger.error("Vision API request failed: %s", e)
+    else:
+        logger.warning("Vision API client not loaded; skipping OCR")
 
     text = vision_text or content.decode('utf-8', errors='ignore')
     parsed = _parse_text(text)
