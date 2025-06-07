@@ -3,14 +3,19 @@ import Layout from '../components/Layout';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-export default function Home() {
+export default function History() {
   const { data } = useSWR('/api/payslip', fetcher);
 
   return (
     <Layout>
-      <h1>ダッシュボード</h1>
-      <p>アップロード済み明細: {data ? data.length : 0} 件</p>
-      {/* グラフやサマリーカードはここに配置予定 */}
+      <h1>明細一覧</h1>
+      <ul>
+        {data?.map((p: any) => (
+          <li key={p.id}>
+            <a href={`/payslip/${p.id}`}>{p.filename}</a>
+          </li>
+        ))}
+      </ul>
     </Layout>
   );
 }
