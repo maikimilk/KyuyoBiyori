@@ -11,4 +11,7 @@ class Payslip(Base):
     date = Column(Date, nullable=True)
     type = Column(String, nullable=True)
     filename = Column(String, nullable=False)
+    gross_amount = Column(Integer, nullable=True)
+    net_amount = Column(Integer, nullable=True)
+    deduction_amount = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
