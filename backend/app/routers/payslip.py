@@ -100,18 +100,19 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
 
 
 def _parse_file(content: bytes) -> dict:
-    """Parse uploaded file using OCR when necessary."""
+    """Parse uploaded file using OCR when possible."""
     logger.debug("Parsing uploaded file")
-    text = content.decode('utf-8', errors='ignore')
-    parsed = _parse_text(text)
-    if not parsed['items'] and _vision_available:
+
+    vision_text = ''
+    if _vision_available:
         try:
             vision_text = _extract_text_with_vision(content)
         except Exception as e:
             logger.error("Vision API request failed: %s", e)
-            vision_text = ''
-        parsed = _parse_text(vision_text)
-    
+
+    text = vision_text or content.decode('utf-8', errors='ignore')
+    parsed = _parse_text(text)
+
     parsed['items'] = _categorize_items(parsed['items'])
     return parsed
 
