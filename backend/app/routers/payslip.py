@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date, datetime, timedelta
 from collections import defaultdict
-from ..schemas import PayslipCreate, Payslip
+from ..schemas import PayslipCreate, Payslip, PayslipPreview, PayslipItem
 from .. import models, database
 
 router = APIRouter()
@@ -15,24 +15,63 @@ def get_db():
     finally:
         db.close()
 
-@router.post('/upload', response_model=Payslip)
+def _parse_file(content: bytes) -> dict:
+    """Very naive parser used as a stub for OCR."""
+    text = content.decode('utf-8', errors='ignore')
+    gross = net = deduction = None
+    items: list[PayslipItem] = []
+    for line in text.splitlines():
+        if ':' in line:
+            name, value = line.split(':', 1)
+            try:
+                amount = int(value.strip())
+            except ValueError:
+                continue
+            items.append(PayslipItem(name=name.strip(), amount=amount))
+            if name.strip() == 'gross':
+                gross = amount
+            if name.strip() == 'net':
+                net = amount
+            if name.strip() == 'deduction':
+                deduction = amount
+    return {
+        'items': items,
+        'gross_amount': gross,
+        'net_amount': net,
+        'deduction_amount': deduction,
+    }
+
+
+@router.post('/upload', response_model=PayslipPreview)
 async def upload_payslip(
     file: UploadFile = File(...),
-    date_str: str | None = Form(None),
-    type: str | None = Form(None),
-    gross_amount: int | None = Form(None),
-    net_amount: int | None = Form(None),
-    deduction_amount: int | None = Form(None),
+):
+    content = await file.read()
+    parsed = _parse_file(content)
+    return PayslipPreview(
+        filename=file.filename,
+        date=None,
+        type=None,
+        gross_amount=parsed.get('gross_amount'),
+        net_amount=parsed.get('net_amount'),
+        deduction_amount=parsed.get('deduction_amount'),
+        items=parsed['items'],
+    )
+
+
+@router.post('/save', response_model=Payslip)
+def save_payslip(
+    data: PayslipCreate,
     db: Session = Depends(get_db)
 ):
-    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else None
+    date_obj = datetime.strptime(data.date, "%Y-%m-%d").date() if data.date else None
     payslip = models.Payslip(
-        filename=file.filename,
+        filename=data.filename,
         date=date_obj,
-        type=type,
-        gross_amount=gross_amount,
-        net_amount=net_amount,
-        deduction_amount=deduction_amount,
+        type=data.type,
+        gross_amount=data.gross_amount,
+        net_amount=data.net_amount,
+        deduction_amount=data.deduction_amount,
     )
     db.add(payslip)
     db.commit()

@@ -8,6 +8,14 @@ class PayslipBase(BaseModel):
     net_amount: int | None = None
     deduction_amount: int | None = None
 
+class PayslipItem(BaseModel):
+    name: str
+    amount: int
+    category: str | None = None
+
+class PayslipPreview(PayslipBase):
+    items: list[PayslipItem] = []
+
 class PayslipCreate(PayslipBase):
     pass
 

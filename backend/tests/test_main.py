@@ -10,15 +10,27 @@ def test_read_root():
     assert response.json() == {"message": "KyuyoBiyori API"}
 
 def test_upload_and_list():
-    files = {'file': ('test.txt', b'content')}
+    files = {'file': ('test.txt', b'gross:120\nnet:100\ndeduction:20')}
     res = client.post('/api/payslip/upload', files=files)
     assert res.status_code == 200
-    data = res.json()
-    assert 'id' in data
+    preview = res.json()
+    assert preview['gross_amount'] == 120
+
+    save_res = client.post('/api/payslip/save', json={
+        'filename': preview['filename'],
+        'date': '2024-01-01',
+        'type': 'salary',
+        'gross_amount': preview['gross_amount'],
+        'net_amount': preview['net_amount'],
+        'deduction_amount': preview['deduction_amount'],
+    })
+    assert save_res.status_code == 200
+    saved = save_res.json()
+    assert 'id' in saved
 
     list_res = client.get('/api/payslip')
     assert list_res.status_code == 200
-    assert any(p['id'] == data['id'] for p in list_res.json())
+    assert any(p['id'] == saved['id'] for p in list_res.json())
 
 
 def test_summary_and_stats():
@@ -26,21 +38,28 @@ def test_summary_and_stats():
     this_month = today.replace(day=1)
     prev_month = (this_month - timedelta(days=1)).replace(day=1)
 
-    files1 = {'file': ('this.txt', b'content')}
-    files2 = {'file': ('prev.txt', b'content')}
+    files1 = {'file': ('this.txt', b'gross:120\nnet:100\ndeduction:20')}
+    files2 = {'file': ('prev.txt', b'gross:100\nnet:80\ndeduction:20')}
 
-    client.post('/api/payslip/upload', files=files1, data={
-        'date_str': this_month.isoformat(),
-        'net_amount': '100',
-        'gross_amount': '120',
-        'deduction_amount': '20'
+    preview1 = client.post('/api/payslip/upload', files=files1).json()
+    preview2 = client.post('/api/payslip/upload', files=files2).json()
+
+    client.post('/api/payslip/save', json={
+        'filename': preview1['filename'],
+        'date': this_month.isoformat(),
+        'type': 'salary',
+        'gross_amount': preview1['gross_amount'],
+        'net_amount': preview1['net_amount'],
+        'deduction_amount': preview1['deduction_amount']
     })
 
-    client.post('/api/payslip/upload', files=files2, data={
-        'date_str': prev_month.isoformat(),
-        'net_amount': '80',
-        'gross_amount': '100',
-        'deduction_amount': '20'
+    client.post('/api/payslip/save', json={
+        'filename': preview2['filename'],
+        'date': prev_month.isoformat(),
+        'type': 'salary',
+        'gross_amount': preview2['gross_amount'],
+        'net_amount': preview2['net_amount'],
+        'deduction_amount': preview2['deduction_amount']
     })
 
     summary = client.get('/api/payslip/summary').json()
