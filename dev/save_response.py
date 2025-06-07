@@ -2,7 +2,7 @@
 import sys
 import json
 import os
-from urllib.parse import urlparse
+import argparse
 
 try:
     import requests
@@ -12,8 +12,18 @@ except ImportError:  # pragma: no cover - requests may not be installed
 
 
 def main():
-    url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000/"
-    resp = requests.get(url)
+    parser = argparse.ArgumentParser(description="Fetch API response and save to dev/result.json")
+    parser.add_argument("url", nargs="?", default="http://localhost:8000/", help="Target URL")
+    parser.add_argument("file", nargs="?", help="File to upload via POST")
+    args = parser.parse_args()
+
+    if args.file:
+        with open(args.file, "rb") as fp:
+            files = {"file": (os.path.basename(args.file), fp)}
+            resp = requests.post(args.url, files=files)
+    else:
+        resp = requests.get(args.url)
+
     resp.raise_for_status()
     try:
         data = resp.json()
@@ -22,8 +32,11 @@ def main():
     os.makedirs("dev", exist_ok=True)
     path = os.path.join("dev", "result.json")
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2) if isinstance(data, dict) or isinstance(data, list) else f.write(str(data))
-    print(f"API response from {url} saved to {path}")
+        if isinstance(data, (dict, list)):
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        else:
+            f.write(str(data))
+    print(f"API response from {args.url} saved to {path}")
 
 
 if __name__ == "__main__":
