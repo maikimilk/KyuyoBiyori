@@ -16,5 +16,10 @@
     "react": "latest",
     "react-dom": "latest",
     "swr": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/react": "19.1.6",
+    "typescript": "5.8.3"
   }
 }
