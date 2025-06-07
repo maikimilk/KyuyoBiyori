@@ -87,7 +87,7 @@ frontend/   # Next.js フロントエンド
 
 ```bash
 # 1. リポジトリクローン
-git clone https://github.com/your-repo/kintai-visualizer.git
+git clone https://github.com/maikimilk/KyuyoBiyori.git
 cd kintai-visualizer
 
 # 2. Python仮想環境（任意）
