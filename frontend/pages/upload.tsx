@@ -20,6 +20,7 @@ export default function Upload() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -60,6 +61,7 @@ export default function Upload() {
     setError('');
     setStatus('');
     setProgress(0);
+    setMonth(new Date().toISOString().slice(0, 7));
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -70,7 +72,7 @@ export default function Upload() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: preview.filename,
-        date: preview.date,
+        date: month ? `${month}-01` : preview.date,
         type: preview.type,
         gross_amount: preview.gross_amount,
         net_amount: preview.net_amount,
@@ -84,8 +86,9 @@ export default function Upload() {
     <Layout>
       <Stack spacing={4}>
         <Heading as="h1" size="lg">明細アップロード</Heading>
-        <Flex gap={2} align="center">
+        <Flex gap={2} align="center" flexWrap="wrap">
           <Input type="file" ref={inputRef} onChange={e => e.target.files && handleFile(e.target.files[0])} />
+          <Input type="month" value={month} onChange={e => setMonth(e.target.value)} maxW="180px" />
           <Button onClick={handleCancel}>取り消し</Button>
         </Flex>
         {progress > 0 && <Progress value={progress} />}
