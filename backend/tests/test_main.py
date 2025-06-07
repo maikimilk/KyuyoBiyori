@@ -88,3 +88,35 @@ def test_filter_and_delete():
     assert del_res.status_code == 200
     remaining = client.get('/api/payslip/list?year=2023&kind=bonus').json()
     assert all(p['id'] != save['id'] for p in remaining)
+
+
+def test_update_and_reparse():
+    preview = client.post('/api/payslip/upload', files={'file': ('u.txt', b'gross:200\nnet:180\ndeduction:20')}).json()
+    save = client.post('/api/payslip/save', json={
+        'filename': preview['filename'],
+        'date': '2024-02-01',
+        'type': 'salary',
+        'gross_amount': preview['gross_amount'],
+        'net_amount': preview['net_amount'],
+        'deduction_amount': preview['deduction_amount'],
+        'items': preview['items'],
+    }).json()
+
+    detail = client.get(f'/api/payslip/{save["id"]}').json()
+    assert detail['id'] == save['id']
+    assert detail['items']
+
+    updated = client.put('/api/payslip/update', json={
+        'id': save['id'],
+        'filename': save['filename'],
+        'date': '2024-03-01',
+        'type': 'salary',
+        'gross_amount': 210,
+        'net_amount': 190,
+        'deduction_amount': 20,
+        'items': detail['items'],
+    }).json()
+    assert updated['gross_amount'] == 210
+
+    resp = client.post('/api/payslip/reparse', json={'items': detail['items']}).json()
+    assert all('category' in it for it in resp)
