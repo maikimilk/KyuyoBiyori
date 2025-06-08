@@ -42,6 +42,29 @@ def get_db():
 
 _deduction_keywords = ['税', '保険', '控除', '料', '差引']
 
+GROSS_KEYS = ('gross', '総支給', '支給総額', '支給合計', '総支給額')
+NET_KEYS = ('net', '手取り', '差引支給額')
+DEDUCTION_KEYS = ('deduction', '控除合計')
+
+# known item names for explicit categorization
+CATEGORY_MAP = {
+    '健康保険料': 'deduction',
+    '厚生年金保険': 'deduction',
+    '雇用保険料': 'deduction',
+    '所得税': 'deduction',
+    '本給': 'payment',
+    '支給額': 'payment',
+}
+
+
+def _detect_slip_type(text: str) -> str | None:
+    """Heuristically detect payslip type from OCR text."""
+    if '賞与支給明細書' in text or '賞与' in text or 'bonus' in text.lower():
+        return 'bonus'
+    if '給与支給明細書' in text or '給与' in text or 'salary' in text.lower():
+        return 'salary'
+    return None
+
 
 def _extract_text_with_vision(content: bytes) -> str:
     """Extract text using Google Cloud Vision API if available."""
@@ -58,17 +81,27 @@ def _extract_text_with_vision(content: bytes) -> str:
         raise RuntimeError(response.error.message)
     text = response.full_text_annotation.text or ''
     logger.info("Vision API returned %d characters", len(text))
+    logger.info("Vision API OCR result:\n%s", text)
     return text
 
 
 def _parse_text(text: str) -> dict:
     gross = net = deduction = None
     items: list[PayslipItem] = []
+    # allow OCR noise like newlines between name and value
     item_pattern = re.compile(
-        r"([\w\u3000-\u30FF\u4E00-\u9FAF]+)[\s:：]+([\-−△▲]?\d[\d,]*)"
+        r"([^\d\-−△▲\s:：\n\r]{2,})[\s:：]*([\-−△▲]?\d[\d,]*)"
     )
 
+    current_section = None
     for line in text.splitlines():
+        if '支給項目' in line:
+            current_section = 'payment'
+            continue
+        if '控除項目' in line:
+            current_section = 'deduction'
+            continue
+
         m = item_pattern.search(line)
         if not m:
             continue
@@ -85,12 +118,12 @@ def _parse_text(text: str) -> dict:
         except ValueError:
             continue
 
-        items.append(PayslipItem(name=name, amount=amount))
-        if name in ('gross', '総支給', '支給総額'):
+        items.append(PayslipItem(name=name, amount=amount, category=current_section))
+        if name in GROSS_KEYS:
             gross = amount
-        if name in ('net', '手取り'):
+        if name in NET_KEYS:
             net = amount
-        if name in ('deduction', '控除合計'):
+        if name in DEDUCTION_KEYS:
             deduction = amount
 
     return {
@@ -104,10 +137,15 @@ def _parse_text(text: str) -> dict:
 def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
     categorized: list[PayslipItem] = []
     for it in items:
-        category = 'payment'
-        if it.amount < 0 or any(k in it.name for k in _deduction_keywords):
-            category = 'deduction'
-        categorized.append(PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category))
+        category = it.category or CATEGORY_MAP.get(it.name)
+        if not category:
+            if it.amount < 0 or any(k in it.name for k in _deduction_keywords):
+                category = 'deduction'
+            else:
+                category = 'payment'
+        categorized.append(
+            PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category)
+        )
     return categorized
 
 
@@ -128,6 +166,7 @@ def _parse_file(content: bytes) -> dict:
     parsed = _parse_text(text)
 
     parsed['items'] = _categorize_items(parsed['items'])
+    parsed['text'] = text
     return parsed
 
 
@@ -152,10 +191,7 @@ async def upload_payslip(
 ):
     content = await file.read()
     parsed = _parse_file(content)
-    slip_type = None
-    text_blob = '\n'.join([it.name for it in parsed['items']])
-    if '賞与' in text_blob or 'bonus' in text_blob.lower():
-        slip_type = 'bonus'
+    slip_type = _detect_slip_type(parsed.get('text', ''))
     return PayslipPreview(
         filename=file.filename,
         date=None,
