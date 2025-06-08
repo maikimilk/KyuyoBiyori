@@ -70,6 +70,7 @@ GROSS_KEYS = ("gross", "総支給", "支給総額", "支給合計", "総支給�
 NET_KEYS = ("net", "手取り", "差引支給額")
 DEDUCTION_KEYS = ("deduction", "控除合計")
 TOTAL_KEYS = set(GROSS_KEYS) | set(NET_KEYS) | set(DEDUCTION_KEYS)
+TOTAL_KEYWORDS = re.compile(r"(合計|累計|差引|総支給)")
 
 # known item names for explicit categorization
 CATEGORY_MAP = {
@@ -240,20 +241,34 @@ def _parse_text(text: str) -> dict:
             amount = -amount
         return amount
 
+    def _handle_total_line(name: str, amount: int) -> bool:
+        """Handle lines that represent totals. Return True if consumed."""
+        nonlocal gross, net, deduction
+        if not TOTAL_KEYWORDS.search(name):
+            return False
+        if "控除" in name:
+            deduction = amount
+        elif "差引" in name or "手取り" in name:
+            net = amount
+        else:
+            gross = amount
+        return True
+
     current_section = None
+    pending_section: str | None = None
     pending_names: list[str] = []
     reset_sections = ("支給合計", "控除合計", "差引支給額")
 
     def parse_token_pairs(tokens: list[str]) -> bool:
         """Parse simple repeated name/amount pairs. Return True if handled."""
-        nonlocal gross, net, deduction, current_section
+        nonlocal gross, net, deduction, current_section, pending_section
         handled = False
         i = 0
         while i < len(tokens) - 1:
             name = tokens[i].rstrip("：:")
             next_tok = tokens[i + 1]
             if name in SECTION_MAP:
-                current_section = SECTION_MAP[name]
+                pending_section = SECTION_MAP[name]
                 i += 1
                 continue
             # unit before number pattern: "日 21 所定労働日数"
@@ -285,6 +300,9 @@ def _parse_text(text: str) -> dict:
                 except ValueError:
                     i += 2
                     continue
+                if pending_section:
+                    current_section = pending_section
+                    pending_section = None
                 if name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
                         gross = amount
@@ -319,6 +337,9 @@ def _parse_text(text: str) -> dict:
                     except ValueError:
                         i += 1
                         continue
+                    if pending_section:
+                        current_section = pending_section
+                        pending_section = None
                     category = (
                         CATEGORY_MAP.get(nm)
                         or (
@@ -341,6 +362,7 @@ def _parse_text(text: str) -> dict:
 
         if line in reset_sections:
             current_section = None
+            pending_section = None
             pending_names.clear()
             continue
 
@@ -353,7 +375,8 @@ def _parse_text(text: str) -> dict:
                 remainder = m.group(1).strip()
                 break
         if matched_section:
-            current_section = matched_section
+            if pending_section is None:
+                pending_section = matched_section
             pending_names.clear()
             if not remainder:
                 continue
@@ -373,6 +396,9 @@ def _parse_text(text: str) -> dict:
 
         m_att = item_attendance.match(line)
         if m_att:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             name, value, _u = m_att.groups()
             attendance[name.strip()] = int(value)
             pending_names.clear()
@@ -380,6 +406,9 @@ def _parse_text(text: str) -> dict:
 
         m_att_inline = item_attendance_inline.match(line)
         if m_att_inline:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             name, value, _u = m_att_inline.groups()
             attendance[name.strip()] = int(value)
             pending_names.clear()
@@ -387,6 +416,9 @@ def _parse_text(text: str) -> dict:
 
         m = item_amount.match(line)
         if m:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             name, value = m.groups()
             name = re.sub(r"\d+$", "", name.strip())
             if not name or name in KNOWN_METADATA_LABELS:
@@ -411,6 +443,8 @@ def _parse_text(text: str) -> dict:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
+            elif _handle_total_line(name, amount):
+                pass
             else:
                 if section != "attendance" and abs(amount) < 10:
                     logger.warning(
@@ -431,6 +465,9 @@ def _parse_text(text: str) -> dict:
             continue
 
         if value_with_unit.match(line) and pending_names:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             v, _u = value_with_unit.match(line).groups()
             name = pending_names.pop(0)
             attendance[name] = int(v)
@@ -438,6 +475,9 @@ def _parse_text(text: str) -> dict:
 
         if amount_only.match(line):
             if pending_names:
+                if pending_section:
+                    current_section = pending_section
+                    pending_section = None
                 name = pending_names.pop(0)
                 try:
                     amount = _clean_amount(line)
@@ -457,6 +497,8 @@ def _parse_text(text: str) -> dict:
                         net = amount
                     if name in DEDUCTION_KEYS:
                         deduction = amount
+                elif _handle_total_line(name, amount):
+                    pass
                 else:
                     if section != "attendance" and abs(amount) < 10:
                         logger.warning(
@@ -488,6 +530,9 @@ def _parse_text(text: str) -> dict:
 
         m_first = amount_first_pattern.match(line)
         if m_first:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             try:
                 amount = _clean_amount(m_first.group(1))
             except ValueError:
@@ -510,6 +555,8 @@ def _parse_text(text: str) -> dict:
                         net = amount
                     if prev_name in DEDUCTION_KEYS:
                         deduction = amount
+                elif _handle_total_line(prev_name, amount):
+                    pass
                 else:
                     if section_prev != "attendance" and abs(amount) < 10:
                         logger.warning(
@@ -552,6 +599,8 @@ def _parse_text(text: str) -> dict:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
+            elif _handle_total_line(name, amount):
+                pass
             else:
                 if section != "attendance" and abs(amount) < 10 and not pending_names:
                     logger.warning(
@@ -595,6 +644,9 @@ def _parse_text(text: str) -> dict:
                 m_val = value_with_unit.match(token)
                 if m_val:
                     if name_queue:
+                        if pending_section:
+                            current_section = pending_section
+                            pending_section = None
                         v, _u = m_val.groups()
                         name = name_queue.pop(0)
                         attendance[name] = int(v)
@@ -604,6 +656,9 @@ def _parse_text(text: str) -> dict:
 
                 if amount_only.match(token):
                     if name_queue:
+                        if pending_section:
+                            current_section = pending_section
+                            pending_section = None
                         name = name_queue.pop(0)
                         try:
                             amount = _clean_amount(token)
@@ -624,6 +679,8 @@ def _parse_text(text: str) -> dict:
                                 net = amount
                             if name in DEDUCTION_KEYS:
                                 deduction = amount
+                        elif _handle_total_line(name, amount):
+                            pass
                         else:
                             if section != "attendance" and abs(amount) < 10:
                                 logger.warning(
@@ -662,6 +719,9 @@ def _parse_text(text: str) -> dict:
                     name, val = m_name_amount.groups()
                     digits = re.sub(r"\D", "", val)
                     if ("," in val or len(digits) >= 2) and name and name not in KNOWN_METADATA_LABELS and name not in KNOWN_SECTION_LABELS:
+                        if pending_section:
+                            current_section = pending_section
+                            pending_section = None
                         section = current_section
                         try:
                             amount = _clean_amount(val)
@@ -721,13 +781,16 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
                 )
         if category == "skip":
             continue
+        section = it.section or (
+            "attendance" if category == "attendance" else "payment" if category == "payment" else "deduction" if category == "deduction" else None
+        )
         categorized.append(
             PayslipItem(
                 id=it.id,
                 name=it.name,
                 amount=it.amount,
                 category=category,
-                section=it.section,
+                section=section,
             )
         )
     return categorized
