@@ -1,4 +1,4 @@
-from backend.app.routers.payslip import _parse_text
+from backend.app.routers.payslip import _parse_text, _categorize_items
 
 
 def test_parse_trailing_number_removed_and_small_amount_skip():
@@ -29,4 +29,20 @@ def test_amount_first_pattern():
     result = _parse_text(text)
     items = result['items']
     assert any(it.name == '雇用保険料' and it.amount == -12345 for it in items)
+
+
+def test_quantity_unit_skipped():
+    text = "日 10\n基本給 100000"
+    result = _parse_text(text)
+    items = _categorize_items(result['items'])
+    assert all(it.name != '日' for it in items)
+    assert any(it.name == '基本給' for it in items)
+
+
+def test_item_line_pattern_with_amount_at_end():
+    text = "通勤費補助 12,860"
+    result = _parse_text(text)
+    items = _categorize_items(result['items'])
+    assert any(it.name == '通勤費補助' and it.amount == 12860 for it in items)
+    assert any(it.name == '通勤費補助' and it.category == 'payment' for it in items)
 

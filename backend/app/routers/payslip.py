@@ -42,6 +42,9 @@ def get_db():
 
 _deduction_keywords = ['税', '保険', '控除', '料', '差引']
 
+# units that indicate quantities rather than monetary amounts
+QUANTITY_UNITS = ["日", "人", "時間", "回", "回数", "月", "週"]
+
 GROSS_KEYS = ('gross', '総支給', '支給総額', '支給合計', '総支給額')
 NET_KEYS = ('net', '手取り', '差引支給額')
 DEDUCTION_KEYS = ('deduction', '控除合計')
@@ -54,6 +57,14 @@ CATEGORY_MAP = {
     '所得税': 'deduction',
     '本給': 'payment',
     '支給額': 'payment',
+    '通勤費補助': 'payment',
+    '東友会費': 'deduction',
+    '共済会費': 'deduction',
+    '社員会費': 'deduction',
+    '控除合計': 'deduction',
+    '差引支給額': 'net',
+    '雇保対象額': 'skip',
+    '当月所得税累計': 'skip',
 }
 
 # common section headers that should not be treated as item names
@@ -143,7 +154,7 @@ def _parse_text(text: str) -> dict:
     items: list[PayslipItem] = []
     # allow OCR noise like newlines between name and value
     item_pattern = re.compile(
-        r"([^\d\-−△▲\s:：\n\r]{2,})[\s:：]*([\-−△▲]?\d[\d,]*)"
+        r"([\u3000-\u30FF\u4E00-\u9FAF\w\s\(\)]+?)[:：\s]*([\-−△▲]?\d[\d,]*)$"
     )
     amount_only_pattern = re.compile(r"^[\-−△▲]?\d[\d,]*$")
     amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
@@ -171,6 +182,10 @@ def _parse_text(text: str) -> dict:
         if m:
             name = re.sub(r"\d+$", "", m.group(1).strip())
             if name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
+            if any(unit in name for unit in QUANTITY_UNITS):
+                logger.info("Skipping quantity unit item: %s", name)
                 pending_item_name = None
                 continue
             raw_amount = (
@@ -202,6 +217,10 @@ def _parse_text(text: str) -> dict:
         if amount_only_pattern.match(line):
             if pending_item_name:
                 if pending_item_name in KNOWN_METADATA_LABELS:
+                    pending_item_name = None
+                    continue
+                if any(unit in pending_item_name for unit in QUANTITY_UNITS):
+                    logger.info("Skipping quantity unit item: %s", pending_item_name)
                     pending_item_name = None
                     continue
                 name = pending_item_name
@@ -250,6 +269,10 @@ def _parse_text(text: str) -> dict:
             if name in KNOWN_METADATA_LABELS:
                 pending_item_name = None
                 continue
+            if any(unit in name for unit in QUANTITY_UNITS):
+                logger.info("Skipping quantity unit item: %s", name)
+                pending_item_name = None
+                continue
             if abs(amount) < 10:
                 logger.warning("Skipping suspicious small amount %s for %s", amount, name)
             else:
@@ -267,6 +290,10 @@ def _parse_text(text: str) -> dict:
         item_name = re.sub(r"\d+$", "", line)
         if item_name:
             if item_name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
+            if any(unit in item_name for unit in QUANTITY_UNITS):
+                logger.info("Skipping quantity unit item: %s", item_name)
                 pending_item_name = None
                 continue
             pending_item_name = item_name
@@ -290,6 +317,8 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
                 category = 'payment'
             if it.name not in CATEGORY_MAP:
                 logger.info("Unknown item name encountered: %s -> %s", it.name, category)
+        if category == 'skip':
+            continue
         categorized.append(
             PayslipItem(
                 id=it.id,
