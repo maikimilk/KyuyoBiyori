@@ -14,6 +14,7 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
 try:
     from google.cloud import vision  # type: ignore
+
     _vision_available = True
     logger.info("Google Cloud Vision API client loaded")
 except Exception as e:  # pragma: no cover - library optional during tests
@@ -40,7 +41,8 @@ def get_db():
     finally:
         db.close()
 
-_deduction_keywords = ['税', '保険', '控除', '料', '差引']
+
+_deduction_keywords = ["税", "保険", "控除", "料", "差引"]
 
 # units that indicate quantities rather than monetary amounts
 # "月" は給与明細のタイトルに自然に含まれるため除外する
@@ -48,93 +50,94 @@ QUANTITY_UNITS = ["日", "人", "時間", "回", "回数", "週"]
 # pattern to detect attendance items such as "欠勤日数" or "残業時間"
 ATTENDANCE_PATTERN = re.compile(r"(日数|時間|回数?|人|週)$")
 
-GROSS_KEYS = ('gross', '総支給', '支給総額', '支給合計', '総支給額')
-NET_KEYS = ('net', '手取り', '差引支給額')
-DEDUCTION_KEYS = ('deduction', '控除合計')
+GROSS_KEYS = ("gross", "総支給", "支給総額", "支給合計", "総支給額")
+NET_KEYS = ("net", "手取り", "差引支給額")
+DEDUCTION_KEYS = ("deduction", "控除合計")
+TOTAL_KEYS = set(GROSS_KEYS) | set(NET_KEYS) | set(DEDUCTION_KEYS)
 
 # known item names for explicit categorization
 CATEGORY_MAP = {
-    '健康保険料': 'deduction',
-    '厚生年金保険': 'deduction',
-    '雇用保険料': 'deduction',
-    '所得税': 'deduction',
-    '本給': 'payment',
-    '支給額': 'payment',
-    '通勤費補助': 'payment',
-    '東友会費': 'deduction',
-    '共済会費': 'deduction',
-    '社員会費': 'deduction',
-    '控除合計': 'deduction',
-    '差引支給額': 'net',
-    '雇保対象額': 'skip',
-    '当月所得税累計': 'skip',
-    '口座振込額': 'net',
+    "健康保険料": "deduction",
+    "厚生年金保険": "deduction",
+    "雇用保険料": "deduction",
+    "所得税": "deduction",
+    "本給": "payment",
+    "支給額": "payment",
+    "通勤費補助": "payment",
+    "東友会費": "deduction",
+    "共済会費": "deduction",
+    "社員会費": "deduction",
+    "控除合計": "deduction",
+    "差引支給額": "net",
+    "雇保対象額": "skip",
+    "当月所得税累計": "skip",
+    "口座振込額": "net",
 }
 
 # common section headers that should not be treated as item names
 KNOWN_SECTION_LABELS = [
     # 明細で確認されているもの
-    '支給項目',
-    '控除項目',
-    '就業項目',
-    '当月欄',
-    '年間累計欄',
+    "支給項目",
+    "控除項目",
+    "就業項目",
+    "当月欄",
+    "年間累計欄",
     # 一般汎用
-    '基本情報',
-    '社員情報',
-    '勤怠情報',
-    '勤務情報',
-    '個人情報',
-    '所属情報',
-    '支給内訳',
-    '控除内訳',
-    '勤怠明細',
-    '勤怠項目',
-    '当月明細',
-    '年間累計',
-    '差引支給額欄',
-    '賞与明細',
-    '賞与欄',
-    '手当項目',
-    '保険料明細',
-    'その他',
-    '備考欄',
-    '支給合計欄',
-    '控除合計欄',
+    "基本情報",
+    "社員情報",
+    "勤怠情報",
+    "勤務情報",
+    "個人情報",
+    "所属情報",
+    "支給内訳",
+    "控除内訳",
+    "勤怠明細",
+    "勤怠項目",
+    "当月明細",
+    "年間累計",
+    "差引支給額欄",
+    "賞与明細",
+    "賞与欄",
+    "手当項目",
+    "保険料明細",
+    "その他",
+    "備考欄",
+    "支給合計欄",
+    "控除合計欄",
     # 特殊系
-    '課税対象額',
-    '社会保険対象額',
-    '雇保対象額',
-    '退職金対象額',
-    '年末調整対象額',
+    "課税対象額",
+    "社会保険対象額",
+    "雇保対象額",
+    "退職金対象額",
+    "年末調整対象額",
 ]
 
 # mapping of known section headers to internal section names
 SECTION_MAP = {
-    '支給項目': 'payment',
-    '控除項目': 'deduction',
-    '就業項目': 'attendance',
-    '勤怠項目': 'attendance',
-    '勤怠明細': 'attendance',
-    '勤怠情報': 'attendance',
-    '勤務情報': 'attendance',
-    '当月欄': '当月',
-    '年間累計欄': '年間累計',
+    "支給項目": "payment",
+    "控除項目": "deduction",
+    "就業項目": "attendance",
+    "勤怠項目": "attendance",
+    "勤怠明細": "attendance",
+    "勤怠情報": "attendance",
+    "勤務情報": "attendance",
+    "当月欄": "当月",
+    "年間累計欄": "年間累計",
 }
 
 # labels that contain employee metadata and should never become payslip items
 KNOWN_METADATA_LABELS = [
-    '社員番号',
-    '氏名',
-    '資格',
-    '所属',
-    '役職',
-    '事業所名',
-    '部門名',
-    '部署',
-    '支店名',
-    '住所',
-    '電話番号',
+    "社員番号",
+    "氏名",
+    "資格",
+    "所属",
+    "役職",
+    "事業所名",
+    "部門名",
+    "部署",
+    "支店名",
+    "住所",
+    "電話番号",
 ]
 
 
@@ -144,23 +147,23 @@ def _detect_slip_type(text: str) -> str | None:
         return None
 
     lines = text.splitlines()
-    header = lines[0][:20] if lines else ''
+    header = lines[0][:20] if lines else ""
 
     slip_type = None
-    if '賞与支給明細書' in header:
-        slip_type = 'bonus'
-    elif '給与支給明細書' in header:
-        slip_type = 'salary'
-    elif re.search(r'^\s*賞与[額支給]?', header):
-        slip_type = 'bonus'
-    elif re.search(r'^\s*給与[額支給]?', header):
-        slip_type = 'salary'
+    if "賞与支給明細書" in header:
+        slip_type = "bonus"
+    elif "給与支給明細書" in header:
+        slip_type = "salary"
+    elif re.search(r"^\s*賞与[額支給]?", header):
+        slip_type = "bonus"
+    elif re.search(r"^\s*給与[額支給]?", header):
+        slip_type = "salary"
 
     if slip_type is None:
-        if '賞与' in text or 'bonus' in text.lower():
-            slip_type = 'bonus'
-        elif '給与' in text or 'salary' in text.lower():
-            slip_type = 'salary'
+        if "賞与" in text or "bonus" in text.lower():
+            slip_type = "bonus"
+        elif "給与" in text or "salary" in text.lower():
+            slip_type = "salary"
     return slip_type
 
 
@@ -168,7 +171,7 @@ def _extract_text_with_vision(content: bytes) -> str:
     """Extract text using Google Cloud Vision API if available."""
     if not _vision_available:
         logger.debug("Vision API not available; skipping OCR")
-        return ''
+        return ""
 
     logger.info("Sending image to Google Cloud Vision API")
     client = vision.ImageAnnotatorClient()
@@ -177,7 +180,7 @@ def _extract_text_with_vision(content: bytes) -> str:
     if response.error.message:
         logger.error("Vision API error: %s", response.error.message)
         raise RuntimeError(response.error.message)
-    text = response.full_text_annotation.text or ''
+    text = response.full_text_annotation.text or ""
     logger.info("Vision API returned %d characters", len(text))
     logger.info("Vision API OCR result:\n%s", text)
     return text
@@ -190,12 +193,14 @@ def _parse_text(text: str) -> dict:
     item_pattern = re.compile(
         r"([\u3000-\u30FF\u4E00-\u9FAF\w\s\(\)]+?)[:：\s]*([\-−△▲]?\d[\d,]*)"
     )  # `$` を外して行末以外の金額も拾う
-    amount_only_pattern = re.compile(r"^[\-−△▲]?\d[\d,]*$")
+    amount_only_pattern = re.compile(
+        rf"^[\-−△▲]?\d[\d,]*(?:{'|'.join(QUANTITY_UNITS)})?$"
+    )
     amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
 
     current_section = None
     pending_item_name: str | None = None
-    reset_sections = ('支給合計', '控除合計', '差引支給額')
+    reset_sections = ("支給合計", "控除合計", "差引支給額")
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -206,10 +211,12 @@ def _parse_text(text: str) -> dict:
             pending_item_name = None
             continue
 
+        if line in SECTION_MAP:
+            current_section = SECTION_MAP[line]
+            pending_item_name = None
+            continue
         if line in KNOWN_SECTION_LABELS:
             pending_item_name = None
-            if line in SECTION_MAP:
-                current_section = SECTION_MAP[line]
             continue
 
         if any(line.startswith(lbl) for lbl in KNOWN_METADATA_LABELS):
@@ -240,18 +247,21 @@ def _parse_text(text: str) -> dict:
                 continue
             section = current_section
             if ATTENDANCE_PATTERN.search(name):
-                section = 'attendance'
+                section = "attendance"
 
-            if section != 'attendance' and abs(amount) < 10:
-                logger.warning("Skipping suspicious small amount %s for %s", amount, name)
-            else:
-                items.append(PayslipItem(name=name, amount=amount, section=section))
+            if name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
+            elif section != "attendance" and abs(amount) < 10:
+                logger.warning(
+                    "Skipping suspicious small amount %s for %s", amount, name
+                )
+            else:
+                items.append(PayslipItem(name=name, amount=amount, section=section))
             pending_item_name = None
             continue
 
@@ -262,7 +272,7 @@ def _parse_text(text: str) -> dict:
             if pending_item_name is not None:
                 name = pending_item_name
                 raw_amount = (
-                    line
+                    re.sub(rf"({'|'.join(QUANTITY_UNITS)})$", "", line)
                     .replace(",", "")
                     .replace("−", "-")
                     .replace("△", "-")
@@ -275,21 +285,24 @@ def _parse_text(text: str) -> dict:
                     continue
                 section = current_section
                 if ATTENDANCE_PATTERN.search(name):
-                    section = 'attendance'
-                if section != 'attendance' and abs(amount) < 10:
-                    logger.warning("Skipping suspicious small amount %s for %s", amount, name)
-                else:
-                    items.append(PayslipItem(name=name, amount=amount, section=section))
+                    section = "attendance"
+                if name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
                         gross = amount
                     if name in NET_KEYS:
                         net = amount
                     if name in DEDUCTION_KEYS:
                         deduction = amount
+                elif section != "attendance" and abs(amount) < 10:
+                    logger.warning(
+                        "Skipping suspicious small amount %s for %s", amount, name
+                    )
+                else:
+                    items.append(PayslipItem(name=name, amount=amount, section=section))
                 pending_item_name = None
             else:
                 raw_amount = (
-                    line
+                    re.sub(rf"({'|'.join(QUANTITY_UNITS)})$", "", line)
                     .replace(",", "")
                     .replace("−", "-")
                     .replace("△", "-")
@@ -323,17 +336,25 @@ def _parse_text(text: str) -> dict:
                 prev_name = pending_item_name
                 section_prev = current_section
                 if ATTENDANCE_PATTERN.search(prev_name):
-                    section_prev = 'attendance'
-                if section_prev != 'attendance' and abs(amount) < 10:
-                    logger.warning("Skipping suspicious small amount %s for %s", amount, prev_name)
+                    section_prev = "attendance"
+                if section_prev != "attendance" and abs(amount) < 10:
+                    logger.warning(
+                        "Skipping suspicious small amount %s for %s", amount, prev_name
+                    )
                 else:
-                    items.append(PayslipItem(name=prev_name, amount=amount, section=section_prev))
-                    if prev_name in GROSS_KEYS:
-                        gross = amount
-                    if prev_name in NET_KEYS:
-                        net = amount
-                    if prev_name in DEDUCTION_KEYS:
-                        deduction = amount
+                    if prev_name in TOTAL_KEYS:
+                        if prev_name in GROSS_KEYS:
+                            gross = amount
+                        if prev_name in NET_KEYS:
+                            net = amount
+                        if prev_name in DEDUCTION_KEYS:
+                            deduction = amount
+                    else:
+                        items.append(
+                            PayslipItem(
+                                name=prev_name, amount=amount, section=section_prev
+                            )
+                        )
 
                 if name and name not in KNOWN_METADATA_LABELS:
                     pending_item_name = name
@@ -349,17 +370,20 @@ def _parse_text(text: str) -> dict:
                 continue
             section = current_section
             if ATTENDANCE_PATTERN.search(name):
-                section = 'attendance'
-            if section != 'attendance' and abs(amount) < 10 and not pending_item_name:
-                logger.warning("Skipping suspicious small amount %s for %s", amount, name)
-            else:
-                items.append(PayslipItem(name=name, amount=amount, section=section))
+                section = "attendance"
+            if name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
+            elif section != "attendance" and abs(amount) < 10 and not pending_item_name:
+                logger.warning(
+                    "Skipping suspicious small amount %s for %s", amount, name
+                )
+            else:
+                items.append(PayslipItem(name=name, amount=amount, section=section))
             pending_item_name = None
             continue
 
@@ -373,10 +397,10 @@ def _parse_text(text: str) -> dict:
         pending_item_name = item_name
 
     return {
-        'items': items,
-        'gross_amount': gross,
-        'net_amount': net,
-        'deduction_amount': deduction,
+        "items": items,
+        "gross_amount": gross,
+        "net_amount": net,
+        "deduction_amount": deduction,
     }
 
 
@@ -385,15 +409,17 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
     for it in items:
         category = it.category or CATEGORY_MAP.get(it.name)
         if not category:
-            if it.section == 'attendance' or ATTENDANCE_PATTERN.search(it.name):
-                category = 'attendance'
+            if it.section == "attendance" or ATTENDANCE_PATTERN.search(it.name):
+                category = "attendance"
             elif it.amount < 0 or any(k in it.name for k in _deduction_keywords):
-                category = 'deduction'
+                category = "deduction"
             else:
-                category = 'payment'
+                category = "payment"
             if it.name not in CATEGORY_MAP:
-                logger.info("Unknown item name encountered: %s -> %s", it.name, category)
-        if category == 'skip':
+                logger.info(
+                    "Unknown item name encountered: %s -> %s", it.name, category
+                )
+        if category == "skip":
             continue
         categorized.append(
             PayslipItem(
@@ -411,7 +437,7 @@ def _parse_file(content: bytes) -> dict:
     """Parse uploaded file using OCR when possible."""
     logger.debug("Parsing uploaded file")
 
-    vision_text = ''
+    vision_text = ""
     if _vision_available:
         try:
             vision_text = _extract_text_with_vision(content)
@@ -420,11 +446,11 @@ def _parse_file(content: bytes) -> dict:
     else:
         logger.warning("Vision API client not loaded; skipping OCR")
 
-    text = vision_text or content.decode('utf-8', errors='ignore')
+    text = vision_text or content.decode("utf-8", errors="ignore")
     parsed = _parse_text(text)
 
-    parsed['items'] = _categorize_items(parsed['items'])
-    parsed['text'] = text
+    parsed["items"] = _categorize_items(parsed["items"])
+    parsed["text"] = text
     return parsed
 
 
@@ -443,29 +469,26 @@ def _parse_date(date_str: str | None) -> date | None:
     raise HTTPException(status_code=400, detail="Invalid date format")
 
 
-@router.post('/upload', response_model=PayslipPreview)
+@router.post("/upload", response_model=PayslipPreview)
 async def upload_payslip(
     file: UploadFile = File(...),
 ):
     content = await file.read()
     parsed = _parse_file(content)
-    slip_type = _detect_slip_type(parsed.get('text', ''))
+    slip_type = _detect_slip_type(parsed.get("text", ""))
     return PayslipPreview(
         filename=file.filename,
         date=None,
         type=slip_type,
-        gross_amount=parsed.get('gross_amount'),
-        net_amount=parsed.get('net_amount'),
-        deduction_amount=parsed.get('deduction_amount'),
-        items=parsed['items'],
+        gross_amount=parsed.get("gross_amount"),
+        net_amount=parsed.get("net_amount"),
+        deduction_amount=parsed.get("deduction_amount"),
+        items=parsed["items"],
     )
 
 
-@router.post('/save', response_model=Payslip)
-def save_payslip(
-    data: PayslipCreate,
-    db: Session = Depends(get_db)
-):
+@router.post("/save", response_model=Payslip)
+def save_payslip(data: PayslipCreate, db: Session = Depends(get_db)):
     date_obj = _parse_date(data.date)
     payslip = models.Payslip(
         filename=data.filename,
@@ -490,16 +513,17 @@ def save_payslip(
     db.refresh(payslip)
     return payslip
 
-@router.get('/', response_model=list[Payslip])
+
+@router.get("/", response_model=list[Payslip])
 def list_payslips(db: Session = Depends(get_db)):
     return db.query(models.Payslip).all()
 
 
-@router.get('/list', response_model=list[Payslip])
+@router.get("/list", response_model=list[Payslip])
 def list_filtered_payslips(
     year: Optional[int] = None,
     kind: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     query = db.query(models.Payslip)
     if year:
@@ -511,21 +535,21 @@ def list_filtered_payslips(
     return query.all()
 
 
-@router.delete('/delete')
+@router.delete("/delete")
 def delete_payslip(payslip_id: int, db: Session = Depends(get_db)):
     payslip = db.query(models.Payslip).get(payslip_id)
     if not payslip:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail="Not found")
     db.delete(payslip)
     db.commit()
-    return {'status': 'deleted'}
+    return {"status": "deleted"}
 
 
-@router.post('/reparse', response_model=list[PayslipItem])
+@router.post("/reparse", response_model=list[PayslipItem])
 def reparse_payslip(data: ReparseRequest):
     items = []
     for it in data.items:
-        category = 'deduction' if it.amount < 0 else 'payment'
+        category = "deduction" if it.amount < 0 else "payment"
         items.append(
             PayslipItem(
                 id=it.id,
@@ -538,11 +562,11 @@ def reparse_payslip(data: ReparseRequest):
     return items
 
 
-@router.put('/update', response_model=Payslip)
+@router.put("/update", response_model=Payslip)
 def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
     payslip = db.query(models.Payslip).get(data.id)
     if not payslip:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail="Not found")
     payslip.filename = data.filename
     payslip.date = _parse_date(data.date)
     payslip.type = data.type
@@ -551,12 +575,15 @@ def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
     payslip.deduction_amount = data.deduction_amount
     payslip.items.clear()
     for it in data.items:
-        payslip.items.append(models.PayslipItem(name=it.name, amount=it.amount, category=it.category))
+        payslip.items.append(
+            models.PayslipItem(name=it.name, amount=it.amount, category=it.category)
+        )
     db.commit()
     db.refresh(payslip)
     return payslip
 
-@router.get('/summary')
+
+@router.get("/summary")
 def payslip_summary(db: Session = Depends(get_db)):
     today = date.today()
     start_month = today.replace(day=1)
@@ -567,8 +594,10 @@ def payslip_summary(db: Session = Depends(get_db)):
         return sum(x or 0 for x in query)
 
     this_month = db.query(models.Payslip).filter(models.Payslip.date >= start_month)
-    prev_month = db.query(models.Payslip).filter(models.Payslip.date >= start_prev_month, models.Payslip.date <= prev_month_end)
-    bonus = db.query(models.Payslip).filter(models.Payslip.type == 'bonus')
+    prev_month = db.query(models.Payslip).filter(
+        models.Payslip.date >= start_prev_month, models.Payslip.date <= prev_month_end
+    )
+    bonus = db.query(models.Payslip).filter(models.Payslip.type == "bonus")
 
     net_this_month = sum_amount([p.net_amount for p in this_month])
     gross_this_month = sum_amount([p.gross_amount for p in this_month])
@@ -576,14 +605,20 @@ def payslip_summary(db: Session = Depends(get_db)):
     bonus_total = sum_amount([p.net_amount for p in bonus])
 
     return {
-        'net_this_month': net_this_month,
-        'gross_this_month': gross_this_month,
-        'bonus_total': bonus_total,
-        'diff_vs_prev_month': net_this_month - net_prev_month,
+        "net_this_month": net_this_month,
+        "gross_this_month": gross_this_month,
+        "bonus_total": bonus_total,
+        "diff_vs_prev_month": net_this_month - net_prev_month,
     }
 
-@router.get('/stats')
-def payslip_stats(period: str = 'monthly', target: str = 'net', kind: str | None = None, db: Session = Depends(get_db)):
+
+@router.get("/stats")
+def payslip_stats(
+    period: str = "monthly",
+    target: str = "net",
+    kind: str | None = None,
+    db: Session = Depends(get_db),
+):
     query = db.query(models.Payslip)
     if kind:
         query = query.filter(models.Payslip.type == kind)
@@ -592,50 +627,62 @@ def payslip_stats(period: str = 'monthly', target: str = 'net', kind: str | None
     for p in records:
         if not p.date:
             continue
-        if period == 'monthly':
-            key = p.date.strftime('%Y-%m')
+        if period == "monthly":
+            key = p.date.strftime("%Y-%m")
         else:
-            key = p.date.strftime('%Y')
+            key = p.date.strftime("%Y")
         value = 0
-        if target == 'net':
+        if target == "net":
             value = p.net_amount or 0
-        elif target == 'gross':
+        elif target == "gross":
             value = p.gross_amount or 0
-        elif target == 'deduction':
+        elif target == "deduction":
             value = p.deduction_amount or 0
         grouped[key] += value
 
     labels = sorted(grouped.keys())
     data = [grouped[k] for k in labels]
-    return {'labels': labels, 'data': data}
+    return {"labels": labels, "data": data}
 
-@router.get('/export')
-def export_payslips(format: str = 'csv', db: Session = Depends(get_db)):
+
+@router.get("/export")
+def export_payslips(format: str = "csv", db: Session = Depends(get_db)):
     payslips = db.query(models.Payslip).all()
     records = [
         {
-            'id': p.id,
-            'date': p.date.isoformat() if p.date else '',
-            'type': p.type,
-            'gross_amount': p.gross_amount,
-            'net_amount': p.net_amount,
-            'deduction_amount': p.deduction_amount,
+            "id": p.id,
+            "date": p.date.isoformat() if p.date else "",
+            "type": p.type,
+            "gross_amount": p.gross_amount,
+            "net_amount": p.net_amount,
+            "deduction_amount": p.deduction_amount,
         }
         for p in payslips
     ]
-    if format == 'json':
+    if format == "json":
         return records
-    header = ['id','date','type','gross_amount','net_amount','deduction_amount']
-    def iter_csv():
-        yield ','.join(header) + '\n'
-        for r in records:
-            row = [str(r[h]) if r[h] is not None else '' for h in header]
-            yield ','.join(row) + '\n'
-    return StreamingResponse(iter_csv(), media_type='text/csv', headers={'Content-Disposition': 'attachment; filename=payslips.csv'})
+    header = ["id", "date", "type", "gross_amount", "net_amount", "deduction_amount"]
 
-@router.get('/breakdown')
-def payslip_breakdown(year: int | None = None, category: str = 'deduction', db: Session = Depends(get_db)):
-    query = db.query(models.PayslipItem.name, func.sum(models.PayslipItem.amount)).join(models.Payslip)
+    def iter_csv():
+        yield ",".join(header) + "\n"
+        for r in records:
+            row = [str(r[h]) if r[h] is not None else "" for h in header]
+            yield ",".join(row) + "\n"
+
+    return StreamingResponse(
+        iter_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=payslips.csv"},
+    )
+
+
+@router.get("/breakdown")
+def payslip_breakdown(
+    year: int | None = None, category: str = "deduction", db: Session = Depends(get_db)
+):
+    query = db.query(models.PayslipItem.name, func.sum(models.PayslipItem.amount)).join(
+        models.Payslip
+    )
     if year:
         start = date(year, 1, 1)
         end = date(year, 12, 31)
@@ -646,11 +693,12 @@ def payslip_breakdown(year: int | None = None, category: str = 'deduction', db: 
     results = query.all()
     labels = [r[0] for r in results]
     data = [r[1] for r in results]
-    return { 'labels': labels, 'data': data }
+    return {"labels": labels, "data": data}
 
-@router.get('/{payslip_id}', response_model=Payslip)
+
+@router.get("/{payslip_id}", response_model=Payslip)
 def get_payslip(payslip_id: int, db: Session = Depends(get_db)):
     payslip = db.query(models.Payslip).get(payslip_id)
     if not payslip:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail="Not found")
     return payslip
