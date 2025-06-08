@@ -207,6 +207,85 @@ def _parse_text(text: str) -> dict:
     pending_names: list[str] = []
     reset_sections = ("支給合計", "控除合計", "差引支給額")
 
+    def parse_token_pairs(tokens: list[str]) -> bool:
+        """Parse simple repeated name/amount pairs. Return True if handled."""
+        nonlocal gross, net, deduction, current_section
+        handled = False
+        i = 0
+        while i < len(tokens) - 1:
+            name = tokens[i].rstrip("：:")
+            next_tok = tokens[i + 1]
+            if name in SECTION_MAP:
+                current_section = SECTION_MAP[name]
+                i += 1
+                continue
+            # quantity with explicit unit separated by space
+            if (
+                i < len(tokens) - 2
+                and re.fullmatch(r"\d+", tokens[i + 1])
+                and tokens[i + 2] in QUANTITY_UNITS
+            ):
+                amount = int(tokens[i + 1])
+                attendance[name] = amount
+                handled = True
+                i += 3
+                continue
+
+            if re.fullmatch(r"[\-−△▲]?\d[\d,]*", next_tok):
+                try:
+                    amount = _clean_amount(next_tok)
+                except ValueError:
+                    i += 2
+                    continue
+                if name in TOTAL_KEYS:
+                    if name in GROSS_KEYS:
+                        gross = amount
+                    if name in NET_KEYS:
+                        net = amount
+                    if name in DEDUCTION_KEYS:
+                        deduction = amount
+                else:
+                    clean_name = re.sub(r"\d+$", "", name)
+                    category = (
+                        CATEGORY_MAP.get(clean_name)
+                        or (
+                            "payment" if current_section == "payment" else "deduction" if current_section == "deduction" else None
+                        )
+                    )
+                    items.append(
+                        PayslipItem(
+                            name=clean_name,
+                            amount=amount,
+                            category=category,
+                            section=current_section,
+                        )
+                    )
+                handled = True
+                i += 2
+            else:
+                m_comb = re.match(r"^([^\d]+?)([\-−△▲]?\d[\d,]*)$", name)
+                if m_comb:
+                    nm, val = m_comb.groups()
+                    try:
+                        amount = _clean_amount(val)
+                    except ValueError:
+                        i += 1
+                        continue
+                    category = (
+                        CATEGORY_MAP.get(nm)
+                        or (
+                            "payment" if current_section == "payment" else "deduction" if current_section == "deduction" else None
+                        )
+                    )
+                    items.append(
+                        PayslipItem(name=nm, amount=amount, category=category, section=current_section)
+                    )
+                    handled = True
+                    i += 1
+                else:
+                    i += 1
+        return handled
+
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -456,6 +535,9 @@ def _parse_text(text: str) -> dict:
         # Token-based fallback with name/amount pair queuing
         tokens = [t for t in re.split(r"\s+", line) if t]
         if tokens:
+            if parse_token_pairs(tokens):
+                pending_names.clear()
+                continue
             name_queue = pending_names[:]
             pending_names = []
             handled = False
