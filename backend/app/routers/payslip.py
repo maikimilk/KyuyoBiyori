@@ -253,6 +253,12 @@ def _parse_text(text: str) -> dict:
     def _handle_total_line(label: str, amt: int) -> bool:
         """Handle strict total labels. Return True if consumed."""
         nonlocal gross, net, deduction
+        if re.match(r"当月(総)?支給額累計", label):
+            gross = amt
+            return True
+        if re.fullmatch(r"口座振込額[:：]?", label):
+            net = amt
+            return True
         if _EXCLUDE_TOTAL.search(label):
             return False
         if "支給合計" in label or "総支給" in label:
@@ -920,6 +926,32 @@ def _post_process_totals(parsed: dict) -> None:
         parsed["net_amount"] = gross - deduction
 
 
+def _normalize_items(items: list[PayslipItem]) -> tuple[list[PayslipItem], list[PayslipItem]]:
+    """Return payment and deduction lists with negative amounts treated as deductions."""
+    payments: list[PayslipItem] = []
+    deductions: list[PayslipItem] = []
+    for it in items:
+        target = deductions if (it.amount < 0 or it.category == "deduction") else payments
+        target.append(it)
+    return payments, deductions
+
+
+def _consistency_check(
+    payments: list[PayslipItem],
+    deductions: list[PayslipItem],
+    gross: int | None,
+    net: int | None,
+) -> list[str]:
+    pay_sum = sum(i.amount for i in payments)
+    ded_sum = sum(i.amount for i in deductions)
+    errors: list[str] = []
+    if gross is not None and abs(pay_sum - gross) > 1:
+        errors.append(f"支給内訳合計({pay_sum}) ≠ 支給合計行({gross})")
+    if net is not None and abs((pay_sum - ded_sum) - net) > 1:
+        errors.append("支給－控除 と 差引支給額 が一致しません")
+    return errors
+
+
 def _parse_file(content: bytes) -> dict:
     """Parse uploaded file using OCR when possible."""
     logger.debug("Parsing uploaded file")
@@ -938,6 +970,16 @@ def _parse_file(content: bytes) -> dict:
 
     parsed["items"] = _categorize_items(parsed["items"])
     _post_process_totals(parsed)
+    payments, deductions = _normalize_items(parsed["items"])
+    warnings = _consistency_check(
+        payments,
+        deductions,
+        parsed.get("gross_amount"),
+        parsed.get("net_amount"),
+    )
+    for w in warnings:
+        logger.warning(w)
+    parsed["warnings"] = warnings
     parsed["text"] = text
     return parsed
 
@@ -998,6 +1040,7 @@ async def upload_payslip(
         net_amount=parsed.get("net_amount"),
         deduction_amount=parsed.get("deduction_amount"),
         items=parsed["items"],
+        warnings=parsed.get("warnings"),
     )
 
 
@@ -1196,19 +1239,22 @@ def export_payslips(format: str = "csv", db: Session = Depends(get_db)):
 def payslip_breakdown(
     year: int | None = None, category: str = "deduction", db: Session = Depends(get_db)
 ):
-    query = db.query(models.PayslipItem.name, func.sum(models.PayslipItem.amount)).join(
+    query = db.query(models.PayslipItem.name, models.PayslipItem.amount, models.PayslipItem.category).join(
         models.Payslip
     )
     if year:
         start = date(year, 1, 1)
         end = date(year, 12, 31)
         query = query.filter(models.Payslip.date >= start, models.Payslip.date <= end)
-    if category:
-        query = query.filter(models.PayslipItem.category == category)
-    query = query.group_by(models.PayslipItem.name)
-    results = query.all()
-    labels = [r[0] for r in results]
-    data = [r[1] for r in results]
+    items = query.all()
+    payments: dict[str, int] = {}
+    deductions: dict[str, int] = {}
+    for name, amount, cat in items:
+        target = deductions if (amount < 0 or cat == "deduction") else payments
+        target[name] = target.get(name, 0) + amount
+    selected = deductions if category == "deduction" else payments
+    labels = list(selected.keys())
+    data = [selected[k] for k in labels]
     return {"labels": labels, "data": data}
 
 

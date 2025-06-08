@@ -53,9 +53,9 @@ def test_amount_first_with_pending_name_queue():
     result = _parse_text(text)
     names = [it.name for it in result["items"]]
     amounts = [it.amount for it in result["items"]]
-    assert names == ["課税対象額", "口座振込額", "雇保対象額"]
-    assert amounts == [135545, 218919, 148405]
-    assert all(it.name for it in result["items"])
+    assert names == ["課税対象額", "雇保対象額"]
+    assert amounts == [135545, 148405]
+    assert result["net_amount"] == 218919
 
 
 def test_amount_only_with_unit_and_pending_name():
