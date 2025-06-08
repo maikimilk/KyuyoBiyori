@@ -250,3 +250,35 @@ def test_section_header_omitted():
     mapping = {it.name: it.category for it in items}
     assert mapping.get("所得税") == "deduction"
     assert mapping.get("本給") == "payment"
+
+
+def test_column_header_row_crush():
+    """横並びヘッダが行単位で現れてもアイテムを拾える"""
+    text = "支給項目\n控除項目\n就業項目\n本給 269,000"
+    result = _parse_text(text)
+    names = [it.name for it in result["items"]]
+    assert "本給" in names
+
+
+def test_header_repeated_without_amount():
+    text = "支給項目\n支給項目\n本給 100000"
+    result = _parse_text(text)
+    names = [it.name for it in result["items"]]
+    assert "本給" in names
+
+
+def test_amount_before_any_section():
+    text = "本給 269000\n所得税 2460"
+    result = _parse_text(text)
+    items = _categorize_items(result["items"])
+    mapping = {it.name: it.category for it in items}
+    assert mapping.get("本給") == "payment"
+    assert mapping.get("所得税") == "deduction"
+
+
+def test_totals_in_different_block():
+    text = "本給 269000\n年間累計欄\n当月総支給額累計 222,795"
+    result = _parse_text(text)
+    names = [it.name for it in result["items"]]
+    assert names == ["本給"]
+    assert result["deduction_amount"] is None
