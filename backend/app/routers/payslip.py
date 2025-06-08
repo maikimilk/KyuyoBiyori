@@ -435,96 +435,93 @@ def _parse_text(text: str) -> dict:
                 pending_names.append(cleaned)
             continue
 
-        # Token-based fallback for lines containing multiple pairs
-        tokens = re.split(r"\s+", line)
-        handled = False
-        for token in tokens:
-            if not token:
-                continue
-            m_val = value_with_unit.match(token)
-            if m_val and pending_names:
-                v, _u = m_val.groups()
-                name = pending_names.pop(0)
-                attendance[name] = int(v)
-                handled = True
-                continue
-            if amount_only.match(token):
-                if pending_names:
-                    name = pending_names.pop(0)
-                    try:
-                        amount = _clean_amount(token)
-                    except ValueError:
-                        continue
-                    section = current_section
-                    if (
-                        section == "attendance"
-                        or ATTENDANCE_PATTERN.search(name)
-                        or name in QUANTITY_UNITS
-                    ):
-                        attendance[name] = amount
-                    elif name in TOTAL_KEYS:
-                        if name in GROSS_KEYS:
-                            gross = amount
-                        if name in NET_KEYS:
-                            net = amount
-                        if name in DEDUCTION_KEYS:
-                            deduction = amount
-                    else:
-                        if section != "attendance" and abs(amount) < 10:
-                            logger.warning(
-                                "Skipping suspicious small amount %s for %s",
-                                amount,
-                                name,
-                            )
+        # Token-based fallback with name/amount pair queuing
+        tokens = [t for t in re.split(r"\s+", line) if t]
+        if tokens:
+            name_queue = pending_names[:]
+            pending_names = []
+            handled = False
+            i = 0
+            while i < len(tokens):
+                token = tokens[i]
+                m_val = value_with_unit.match(token)
+                if m_val:
+                    if name_queue:
+                        v, _u = m_val.groups()
+                        name = name_queue.pop(0)
+                        attendance[name] = int(v)
+                        handled = True
+                    i += 1
+                    continue
+
+                if amount_only.match(token):
+                    if name_queue:
+                        name = name_queue.pop(0)
+                        try:
+                            amount = _clean_amount(token)
+                        except ValueError:
+                            i += 1
+                            continue
+                        section = current_section
+                        if (
+                            section == "attendance"
+                            or ATTENDANCE_PATTERN.search(name)
+                            or name in QUANTITY_UNITS
+                        ):
+                            attendance[name] = amount
+                        elif name in TOTAL_KEYS:
+                            if name in GROSS_KEYS:
+                                gross = amount
+                            if name in NET_KEYS:
+                                net = amount
+                            if name in DEDUCTION_KEYS:
+                                deduction = amount
                         else:
-                            category = (
-                                "payment"
-                                if section == "payment"
-                                else "deduction" if section == "deduction" else None
-                            )
-                            items.append(
-                                PayslipItem(
-                                    name=name,
-                                    amount=amount,
-                                    category=category,
-                                    section=section,
+                            if section != "attendance" and abs(amount) < 10:
+                                logger.warning(
+                                    "Skipping suspicious small amount %s for %s",
+                                    amount,
+                                    name,
                                 )
-                            )
-                else:
-                    try:
-                        amount = _clean_amount(token)
-                    except ValueError:
-                        continue
-                    if abs(amount) < 10:
-                        continue
-                    logger.warning("Amount without item name: %s", token)
-                handled = True
-                continue
+                            else:
+                                category = (
+                                    "payment"
+                                    if section == "payment"
+                                    else "deduction" if section == "deduction" else None
+                                )
+                                items.append(
+                                    PayslipItem(
+                                        name=name,
+                                        amount=amount,
+                                        category=category,
+                                        section=section,
+                                    )
+                                )
+                        handled = True
+                    else:
+                        try:
+                            amount = _clean_amount(token)
+                        except ValueError:
+                            i += 1
+                            continue
+                        if abs(amount) >= 10:
+                            logger.warning("Amount without item name: %s", token)
+                    i += 1
+                    continue
 
-            if re.match(r"^[^\d]+$", token):
                 cleaned = re.sub(r"\d+$", "", token)
                 if (
                     cleaned
                     and cleaned not in KNOWN_METADATA_LABELS
                     and cleaned not in KNOWN_SECTION_LABELS
                 ):
-                    pending_names.append(cleaned)
-                handled = True
+                    name_queue.append(cleaned)
+                    handled = True
+                i += 1
+
+            pending_names.extend(name_queue)
+            if handled:
                 continue
-
-            # token that mixes digits and text, treat as name with trailing digits removed
-            if re.search(r"\d", token):
-                cleaned = re.sub(r"\d+$", "", token)
-                if (
-                    cleaned
-                    and cleaned not in KNOWN_METADATA_LABELS
-                    and cleaned not in KNOWN_SECTION_LABELS
-                ):
-                    pending_names.append(cleaned)
-                handled = True
-
-        if handled:
-            continue
 
         pending_names.clear()
 
