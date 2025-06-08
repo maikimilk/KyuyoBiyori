@@ -56,6 +56,44 @@ CATEGORY_MAP = {
     '支給額': 'payment',
 }
 
+# common section headers that should not be treated as item names
+KNOWN_SECTION_LABELS = [
+    # 明細で確認されているもの
+    '支給項目',
+    '控除項目',
+    '就業項目',
+    '当月欄',
+    '年間累計欄',
+    # 一般汎用
+    '基本情報',
+    '社員情報',
+    '勤怠情報',
+    '勤務情報',
+    '個人情報',
+    '所属情報',
+    '支給内訳',
+    '控除内訳',
+    '勤怠明細',
+    '勤怠項目',
+    '当月明細',
+    '年間累計',
+    '差引支給額欄',
+    '賞与明細',
+    '賞与欄',
+    '手当項目',
+    '保険料明細',
+    'その他',
+    '備考欄',
+    '支給合計欄',
+    '控除合計欄',
+    # 特殊系
+    '課税対象額',
+    '社会保険対象額',
+    '雇保対象額',
+    '退職金対象額',
+    '年末調整対象額',
+]
+
 
 def _detect_slip_type(text: str) -> str | None:
     """Heuristically detect payslip type from OCR text."""
@@ -92,39 +130,86 @@ def _parse_text(text: str) -> dict:
     item_pattern = re.compile(
         r"([^\d\-−△▲\s:：\n\r]{2,})[\s:：]*([\-−△▲]?\d[\d,]*)"
     )
+    amount_only_pattern = re.compile(r"^[\-−△▲]?\d[\d,]*$")
 
     current_section = None
-    for line in text.splitlines():
-        if '支給項目' in line:
-            current_section = 'payment'
+    pending_item_name: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
             continue
-        if '控除項目' in line:
-            current_section = 'deduction'
+
+        if line in KNOWN_SECTION_LABELS:
+            pending_item_name = None
+            if '支給項目' in line:
+                current_section = 'payment'
+            elif '控除項目' in line:
+                current_section = 'deduction'
             continue
 
         m = item_pattern.search(line)
-        if not m:
-            continue
-        name = m.group(1).strip()
-        raw_amount = (
-            m.group(2)
-            .replace(",", "")
-            .replace("−", "-")
-            .replace("△", "-")
-            .replace("▲", "-")
-        )
-        try:
-            amount = int(raw_amount)
-        except ValueError:
+        if m:
+            name = re.sub(r"\d+$", "", m.group(1).strip())
+            raw_amount = (
+                m.group(2)
+                .replace(",", "")
+                .replace("−", "-")
+                .replace("△", "-")
+                .replace("▲", "-")
+            )
+            try:
+                amount = int(raw_amount)
+            except ValueError:
+                pending_item_name = None
+                continue
+
+            if abs(amount) < 10:
+                logger.warning("Skipping suspicious small amount %s for %s", amount, name)
+            else:
+                items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                if name in GROSS_KEYS:
+                    gross = amount
+                if name in NET_KEYS:
+                    net = amount
+                if name in DEDUCTION_KEYS:
+                    deduction = amount
+            pending_item_name = None
             continue
 
-        items.append(PayslipItem(name=name, amount=amount, section=current_section))
-        if name in GROSS_KEYS:
-            gross = amount
-        if name in NET_KEYS:
-            net = amount
-        if name in DEDUCTION_KEYS:
-            deduction = amount
+        if amount_only_pattern.match(line):
+            if pending_item_name:
+                name = pending_item_name
+                raw_amount = (
+                    line
+                    .replace(",", "")
+                    .replace("−", "-")
+                    .replace("△", "-")
+                    .replace("▲", "-")
+                )
+                try:
+                    amount = int(raw_amount)
+                except ValueError:
+                    pending_item_name = None
+                    continue
+                if abs(amount) < 10:
+                    logger.warning("Skipping suspicious small amount %s for %s", amount, name)
+                else:
+                    items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                    if name in GROSS_KEYS:
+                        gross = amount
+                    if name in NET_KEYS:
+                        net = amount
+                    if name in DEDUCTION_KEYS:
+                        deduction = amount
+                pending_item_name = None
+            else:
+                logger.warning("Amount without item name: %s", line)
+            continue
+
+        # treat as item name only (possibly with trailing digits)
+        item_name = re.sub(r"\d+$", "", line)
+        if item_name:
+            pending_item_name = item_name
 
     return {
         'items': items,
