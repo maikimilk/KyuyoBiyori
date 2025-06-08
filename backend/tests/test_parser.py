@@ -298,3 +298,25 @@ def test_section_attendance_flush():
     assert result["attendance"]["不在籍"] == 10
     assert result["attendance"]["休残(日)"] == 20
     assert "不在籍" not in [it.name for it in result["items"]]
+
+
+def test_attendance_not_items():
+    text = "就業項目\n不在籍 10 日\n所定日数 21日"
+    result = _parse_text(text)
+    assert "不在籍" not in [it.name for it in result["items"]]
+    assert result["attendance"]["不在籍"] == 10
+    assert result["attendance"]["所定日数"] == 21
+
+
+def test_amount_unit_space():
+    text = "残業時間  5 時間"
+    result = _parse_text(text)
+    assert result["attendance"]["残業時間"] == 5
+
+
+def test_total_line_strict():
+    text = "当月社会保険累計 2,460\n支給合計 222,795\n差引支給額 218,919"
+    result = _parse_text(text)
+    assert result["gross_amount"] == 222795
+    assert result["net_amount"] == 218919
+    assert result["deduction_amount"] is None
