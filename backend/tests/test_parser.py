@@ -1,4 +1,4 @@
-from backend.app.routers.payslip import _parse_text, _categorize_items
+from backend.app.routers.payslip import _categorize_items, _parse_text
 
 
 def test_parse_trailing_number_removed_and_small_amount_skip():
@@ -74,6 +74,7 @@ def test_totals_not_in_items():
     assert result["net_amount"] == 100000
     assert result["deduction_amount"] == 0
 
+
 def test_section_assignment():
     text = "支給項目\n本給 100000\n控除項目\n所得税 -5000\n勤怠項目\n欠勤日数 2"
     result = _parse_text(text)
@@ -82,3 +83,15 @@ def test_section_assignment():
     assert sections.get("本給") == "payment"
     assert sections.get("所得税") == "deduction"
     assert result["attendance"].get("欠勤日数") == 2
+
+
+def test_multi_pair_and_section_category():
+    text = "支給項目\n本給 269000 通勤費補助 12860\n控除項目\n東友会費 300 共済会費 200"
+    result = _parse_text(text)
+    items = _categorize_items(result["items"])
+    categories = {it.name: it.category for it in items}
+    assert categories.get("本給") == "payment"
+    assert categories.get("通勤費補助") == "payment"
+    assert categories.get("東友会費") == "deduction"
+    assert categories.get("共済会費") == "deduction"
+    assert len(items) == 4
