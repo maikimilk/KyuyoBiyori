@@ -13,6 +13,7 @@ import {
   NumberInputField,
   Select,
   Button,
+  Badge,
 } from '@chakra-ui/react';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
@@ -80,6 +81,9 @@ export default function PayslipDetail() {
     <Layout>
       <Stack spacing={4}>
         <Heading as="h1" size="lg">{data.filename}</Heading>
+        {data.warnings && data.warnings.length > 0 && (
+          <Badge colorScheme="red">⚠ 内訳と合計が一致しません</Badge>
+        )}
         <Flex gap={4} align="flex-start" direction={{ base: 'column', md: 'row' }}>
           <Box flex="1" minW="200px">
             <Text color="gray.500">画像表示は未実装</Text>

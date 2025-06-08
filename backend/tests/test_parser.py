@@ -320,3 +320,11 @@ def test_total_line_strict():
     assert result["gross_amount"] == 222795
     assert result["net_amount"] == 218919
     assert result["deduction_amount"] is None
+
+
+def test_totals_are_not_cumulative():
+    text = "当月総支給額累計 673,095\n支給合計 356,300\n控除合計 53,123\n差引支給額 303,177"
+    r = _parse_text(text)
+    assert r["gross_amount"] == 356300
+    assert r["deduction_amount"] == 53123
+    assert r["net_amount"] == 303177

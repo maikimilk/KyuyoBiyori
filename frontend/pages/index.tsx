@@ -42,6 +42,10 @@ export default function Home() {
             <StatNumber>{summary ? summary.gross_this_month : '--'}円</StatNumber>
           </Stat>
           <Stat>
+            <StatLabel>今月控除</StatLabel>
+            <StatNumber>{summary ? summary.deduction_this_month ?? 0 : '--'}円</StatNumber>
+          </Stat>
+          <Stat>
             <StatLabel>賞与累計</StatLabel>
             <StatNumber>{summary ? summary.bonus_total : '--'}円</StatNumber>
           </Stat>
