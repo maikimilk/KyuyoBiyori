@@ -103,3 +103,91 @@ def test_section_with_colon_and_split_lines():
     items = {it.name: (it.amount, it.section) for it in result["items"]}
     assert items.get("本給") == (269000, "payment")
     assert items.get("所得税") == (2460, "deduction")
+
+
+def test_real_world_ocr_1():
+    text = """
+2025年4月分 給与支給明細書
+三菱電機ディフェンス&スペーステクノロジーズ株式会社
+
+社員番号 4020
+氏名   石川 聖幸
+
+支給項目:
+本給
+269,000
+通勤費補助   12,860    その他(非課) 74,390
+控除項目：
+所得税
+2,460
+雇用保険料  816  東友会費 300  共済会費 200 社員会費 100
+就業項目
+所定日数21日
+不在籍 10 日
+休残(日)  20日
+
+支給合計
+222,795
+控除合計
+3,876
+
+差引支給額
+218,919
+
+当月欄
+課税対象額
+135,545 雇保対象額218,919 148,405
+年間累計欄 (賞与額 翌月反映 )
+当月総支給額累計
+87,250
+当月非課税額累計 816
+当月社会保険累計 2,460
+当月所得税累計
+222,795
+無関係な数字 999999
+
+備考欄
+例：銀行引落など
+"""
+    result = _parse_text(text)
+    items = {it.name: it.amount for it in result["items"]}
+    categories = {it.name: it.category for it in result["items"]}
+    attendance = result["attendance"]
+
+    assert items.get("本給") == 269000
+    assert items.get("通勤費補助") == 12860
+    assert items.get("その他(非課)") == 74390
+    assert items.get("所得税") == 2460
+    assert items.get("雇用保険料") == 816
+    assert items.get("東友会費") == 300
+    assert items.get("共済会費") == 200
+    assert items.get("社員会費") == 100
+    assert attendance.get("所定日数") == 21
+    assert attendance.get("不在籍") == 10
+    assert attendance.get("休残(日)") == 20
+    assert categories.get("本給") == "payment"
+    assert categories.get("所得税") == "deduction"
+
+
+def test_real_world_ocr_2():
+    text = """
+支給項目:  本給 269,000  通勤費補助 12,860
+控除項目:  所得税 2,460  雇用保険料 816
+控除項目: 東友会費300 共済会費200 社員会費 100
+不明な文字列 これは明細ではない
+支給合計  222,795
+差引支給額: 218,919
+"""
+    result = _parse_text(text)
+    items = {it.name: it.amount for it in result["items"]}
+    categories = {it.name: it.category for it in result["items"]}
+
+    assert items.get("本給") == 269000
+    assert items.get("通勤費補助") == 12860
+    assert items.get("所得税") == 2460
+    assert items.get("雇用保険料") == 816
+    assert items.get("東友会費") == 300
+    assert items.get("共済会費") == 200
+    assert items.get("社員会費") == 100
+    assert categories.get("本給") == "payment"
+    assert categories.get("東友会費") == "deduction"

@@ -189,6 +189,7 @@ def _parse_text(text: str) -> dict:
     # line patterns
     item_amount = re.compile(r"^([^\d]+?)[：:\s]+([\-−△▲]?\d[\d,]*)$")
     item_attendance = re.compile(r"^([^\d]+?)[：:\s]+(\d+)(日|人|時間|回数?|週)$")
+    item_attendance_inline = re.compile(r"^([^\d]+?)(\d+)(日|人|時間|回数?|週)$")
     amount_only = re.compile(r"^[\-−△▲]?\d[\d,]*$")
     value_with_unit = re.compile(r"^(\d+)(日|人|時間|回数?|週)$")
     amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
@@ -217,14 +218,19 @@ def _parse_text(text: str) -> dict:
             continue
 
         matched_section = None
+        remainder = ""
         for sec_label, sec_name in SECTION_MAP.items():
-            if re.fullmatch(rf"{re.escape(sec_label)}[：:]*", line):
+            m = re.match(rf"^{re.escape(sec_label)}(?:[：:]\s*|\s+)?(.*)$", line)
+            if m and (not m.group(1) or m.group(1) != line):
                 matched_section = sec_name
+                remainder = m.group(1).strip()
                 break
         if matched_section:
             current_section = matched_section
             pending_names.clear()
-            continue
+            if not remainder:
+                continue
+            line = remainder
 
         if any(re.fullmatch(rf"{re.escape(lbl)}[：:]*\d*", line) for lbl in KNOWN_SECTION_LABELS):
             cleaned = re.sub(r"[\d：:]+$", "", line.strip())
@@ -241,6 +247,13 @@ def _parse_text(text: str) -> dict:
         m_att = item_attendance.match(line)
         if m_att:
             name, value, _u = m_att.groups()
+            attendance[name.strip()] = int(value)
+            pending_names.clear()
+            continue
+
+        m_att_inline = item_attendance_inline.match(line)
+        if m_att_inline:
+            name, value, _u = m_att_inline.groups()
             attendance[name.strip()] = int(value)
             pending_names.clear()
             continue
@@ -513,6 +526,28 @@ def _parse_text(text: str) -> dict:
                             logger.warning("Amount without item name: %s", token)
                     i += 1
                     continue
+
+                m_name_amount = re.match(r"^([^\d]+?)([\-−△▲]?\d[\d,]*)$", token)
+                if m_name_amount:
+                    name, val = m_name_amount.groups()
+                    digits = re.sub(r"\D", "", val)
+                    if ("," in val or len(digits) >= 2) and name and name not in KNOWN_METADATA_LABELS and name not in KNOWN_SECTION_LABELS:
+                        section = current_section
+                        try:
+                            amount = _clean_amount(val)
+                        except ValueError:
+                            i += 1
+                            continue
+                        category = (
+                            "payment" if section == "payment" else "deduction" if section == "deduction" else None
+                        )
+                        items.append(
+                            PayslipItem(name=name, amount=amount, category=category, section=section)
+                        )
+                        handled = True
+                        i += 1
+                        continue
+                    # treat as just a name token if the numeric part is likely an index
 
                 cleaned = re.sub(r"\d+$", "", token)
                 if (
