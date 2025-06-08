@@ -282,3 +282,19 @@ def test_totals_in_different_block():
     names = [it.name for it in result["items"]]
     assert names == ["本給"]
     assert result["deduction_amount"] is None
+
+
+def test_multi_pair_line_not_dropped():
+    text = "通勤費補助 12,860  その他(非課) 74,390"
+    result = _parse_text(text)
+    mapping = {it.name: it.amount for it in result["items"]}
+    assert mapping["通勤費補助"] == 12860
+    assert mapping["その他(非課)"] == 74390
+
+
+def test_section_attendance_flush():
+    text = "就業項目\n不在籍\n10 日\n休残(日) 20日"
+    result = _parse_text(text)
+    assert result["attendance"]["不在籍"] == 10
+    assert result["attendance"]["休残(日)"] == 20
+    assert "不在籍" not in [it.name for it in result["items"]]
