@@ -76,3 +76,12 @@ def test_totals_not_in_items():
     assert result["gross_amount"] == 100000
     assert result["net_amount"] == 100000
     assert result["deduction_amount"] == 0
+
+def test_section_assignment():
+    text = "支給項目\n本給 100000\n控除項目\n所得税 -5000\n勤怠項目\n欠勤日数 2"
+    result = _parse_text(text)
+    items = result["items"]
+    sections = {it.name: it.section for it in items}
+    assert sections.get("本給") == "payment"
+    assert sections.get("所得税") == "deduction"
+    assert sections.get("欠勤日数") == "attendance"
