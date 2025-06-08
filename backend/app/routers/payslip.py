@@ -220,7 +220,7 @@ def _parse_text(text: str) -> dict:
     item_attendance = re.compile(r"^([^\d]+?)[：:\s]+(\d+)(日|人|時間|回数?|週)$")
     item_attendance_inline = re.compile(r"^([^\d]+?)(\d+)(日|人|時間|回数?|週)$")
     amount_only = re.compile(r"^[\+\-−△▲]?\(?\d[\d,]*\)?$")
-    value_with_unit = re.compile(r"^(\d+)(日|人|時間|回数?|週)$")
+    value_with_unit = re.compile(r"^(\d+)\s*(日|人|時間|回数?|週)$")
     amount_first_pattern = re.compile(
         r"^[¥￥]?((?:\([\+\-−△▲]?\d[\d,]*\))|[\+\-−△▲]?\d[\d,]*)\s+(.+)$"
     )
@@ -241,18 +241,19 @@ def _parse_text(text: str) -> dict:
             amount = -amount
         return amount
 
-    def _handle_total_line(name: str, amount: int) -> bool:
-        """Handle lines that represent totals. Return True if consumed."""
+    def _handle_total_line(label: str, amt: int) -> bool:
+        """Handle strict total labels. Return True if consumed."""
         nonlocal gross, net, deduction
-        if not TOTAL_KEYWORDS.search(name):
-            return False
-        if "控除" in name:
-            deduction = amount
-        elif "差引" in name or "手取り" in name:
-            net = amount
-        else:
-            gross = amount
-        return True
+        if "支給合計" in label or "総支給" in label:
+            gross = amt
+            return True
+        if "控除合計" in label and "差引" not in label:
+            deduction = amt
+            return True
+        if "差引支給額" in label or "手取り" in label:
+            net = amt
+            return True
+        return False
 
     current_section = None
     pending_section: str | None = None
@@ -261,7 +262,7 @@ def _parse_text(text: str) -> dict:
 
     def parse_token_pairs(tokens: list[str]) -> bool:
         """Parse simple repeated name/amount pairs. Return True if handled."""
-        nonlocal gross, net, deduction, current_section, pending_section
+        nonlocal gross, net, deduction, current_section, pending_section, pending_names
         handled = False
         i = 0
         while i < len(tokens) - 1:
@@ -269,9 +270,19 @@ def _parse_text(text: str) -> dict:
                 current_section = pending_section
                 pending_section = None
             name = tokens[i].rstrip("：:")
-            next_tok = tokens[i + 1]
+            next_tok = tokens[i + 1] if i + 1 < len(tokens) else None
             if name in SECTION_MAP:
                 pending_section = SECTION_MAP[name]
+                i += 1
+                continue
+            if next_tok is None:
+                cleaned = re.sub(r"\d+$", "", name)
+                if (
+                    cleaned
+                    and cleaned not in KNOWN_METADATA_LABELS
+                    and cleaned not in KNOWN_SECTION_LABELS
+                ):
+                    pending_names.append(cleaned)
                 i += 1
                 continue
             # unit before number pattern: "日 21 所定労働日数"
@@ -297,7 +308,7 @@ def _parse_text(text: str) -> dict:
                 i += 3
                 continue
 
-            if re.fullmatch(r"[\-−△▲]?\d[\d,]*", next_tok):
+            if next_tok and re.fullmatch(r"[\-−△▲]?\d[\d,]*", next_tok):
                 try:
                     amount = _clean_amount(next_tok)
                 except ValueError:
@@ -321,23 +332,41 @@ def _parse_text(text: str) -> dict:
                             "payment" if current_section == "payment" else "deduction" if current_section == "deduction" else None
                         )
                     )
-                    items.append(
-                        PayslipItem(
-                            name=clean_name,
-                            amount=amount,
-                            category=category,
-                            section=current_section,
+                    if current_section != "attendance" and abs(amount) < 10:
+                        logger.warning(
+                            "Skipping suspicious small amount %s for %s",
+                            amount,
+                            clean_name,
                         )
-                    )
+                    else:
+                        items.append(
+                            PayslipItem(
+                                name=clean_name,
+                                amount=amount,
+                                category=category,
+                                section=current_section,
+                            )
+                        )
                 handled = True
                 i += 2
             else:
                 m_comb = re.match(r"^([^\d]+?)([\-−△▲]?\d[\d,]*)$", name)
                 if m_comb:
                     nm, val = m_comb.groups()
-                    try:
-                        amount = _clean_amount(val)
-                    except ValueError:
+                    digits = re.sub(r"\D", "", val)
+                    if "," in val or len(digits) >= 2:
+                        try:
+                            amount = _clean_amount(val)
+                        except ValueError:
+                            i += 1
+                            continue
+                    else:
+                        cleaned = re.sub(r"\d+$", "", nm)
+                        if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                            pending_names.append(cleaned)
+                            handled = True
+                            i += 1
+                            continue
                         i += 1
                         continue
                     if pending_section:
@@ -449,6 +478,7 @@ def _parse_text(text: str) -> dict:
                 or name in QUANTITY_UNITS
             ):
                 attendance[name] = amount
+                pending_names.clear()
             elif name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
                     gross = amount
@@ -484,6 +514,7 @@ def _parse_text(text: str) -> dict:
             v, _u = value_with_unit.match(line).groups()
             name = pending_names.pop(0)
             attendance[name] = int(v)
+            pending_names.clear()
             continue
 
         if amount_only.match(line):
@@ -503,6 +534,7 @@ def _parse_text(text: str) -> dict:
                     or name in QUANTITY_UNITS
                 ):
                     attendance[name] = amount
+                    pending_names.clear()
                 elif name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
                         gross = amount
@@ -561,6 +593,7 @@ def _parse_text(text: str) -> dict:
                     or prev_name in QUANTITY_UNITS
                 ):
                     attendance[prev_name] = amount
+                    pending_names.clear()
                 elif prev_name in TOTAL_KEYS:
                     if prev_name in GROSS_KEYS:
                         gross = amount
@@ -666,8 +699,27 @@ def _parse_text(text: str) -> dict:
                         v, _u = m_val.groups()
                         name = name_queue.pop(0)
                         attendance[name] = int(v)
+                        pending_names.clear()
+                        name_queue.clear()
                         handled = True
                     i += 1
+                    continue
+
+                if (
+                    amount_only.match(token)
+                    and i + 1 < len(tokens)
+                    and tokens[i + 1] in QUANTITY_UNITS
+                    and name_queue
+                ):
+                    if pending_section:
+                        current_section = pending_section
+                        pending_section = None
+                    name = name_queue.pop(0)
+                    attendance[name] = _clean_amount(token)
+                    pending_names.clear()
+                    name_queue.clear()
+                    handled = True
+                    i += 2
                     continue
 
                 if amount_only.match(token):
@@ -795,7 +847,7 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
                 logger.info(
                     "Unknown item name encountered: %s -> %s", it.name, category
                 )
-        if category == "skip":
+        if category in ("skip", "attendance"):
             continue
         if category == "payment" and any(k in it.name for k in _deduction_keywords):
             category = "deduction"
