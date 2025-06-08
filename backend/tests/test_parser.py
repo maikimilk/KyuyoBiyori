@@ -34,8 +34,8 @@ def test_amount_first_pattern():
 def test_quantity_unit_as_attendance():
     text = "日 10\n基本給 100000"
     result = _parse_text(text)
+    assert result["attendance"].get("日") == 10
     items = _categorize_items(result["items"])
-    assert any(it.name == "日" and it.category == "attendance" for it in items)
     assert any(it.name == "基本給" for it in items)
 
 
@@ -60,11 +60,8 @@ def test_amount_first_with_pending_name_queue():
 def test_amount_only_with_unit_and_pending_name():
     text = "所定労働日数\n21日\n基本給 100000"
     result = _parse_text(text)
+    assert result["attendance"].get("所定労働日数") == 21
     items = _categorize_items(result["items"])
-    assert any(
-        it.name == "所定労働日数" and it.amount == 21 and it.category == "attendance"
-        for it in items
-    )
     assert any(it.name == "基本給" for it in items)
 
 
@@ -84,4 +81,4 @@ def test_section_assignment():
     sections = {it.name: it.section for it in items}
     assert sections.get("本給") == "payment"
     assert sections.get("所得税") == "deduction"
-    assert sections.get("欠勤日数") == "attendance"
+    assert result["attendance"].get("欠勤日数") == 2
