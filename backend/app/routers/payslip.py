@@ -66,6 +66,7 @@ CATEGORY_MAP = {
     '差引支給額': 'net',
     '雇保対象額': 'skip',
     '当月所得税累計': 'skip',
+    '口座振込額': 'net',
 }
 
 # common section headers that should not be treated as item names
@@ -124,9 +125,23 @@ KNOWN_METADATA_LABELS = [
 
 def _detect_slip_type(text: str) -> str | None:
     """Heuristically detect payslip type from OCR text."""
-    if '賞与支給明細書' in text or '賞与' in text or 'bonus' in text.lower():
+    if not text:
+        return None
+
+    header = text.splitlines()[0][:20]
+    if '賞与支給明細書' in header:
         return 'bonus'
-    if '給与支給明細書' in text or '給与' in text or 'salary' in text.lower():
+    if '給与支給明細書' in header:
+        return 'salary'
+
+    if re.search(r'^\s*賞与[額支給]?', header):
+        return 'bonus'
+    if re.search(r'^\s*給与[額支給]?', header):
+        return 'salary'
+
+    if '賞与' in text or 'bonus' in text.lower():
+        return 'bonus'
+    if '給与' in text or 'salary' in text.lower():
         return 'salary'
     return None
 
@@ -162,9 +177,15 @@ def _parse_text(text: str) -> dict:
 
     current_section = None
     pending_item_name: str | None = None
+    reset_sections = ('支給合計', '控除合計', '差引支給額')
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
+            continue
+
+        if line in reset_sections:
+            current_section = None
+            pending_item_name = None
             continue
 
         if line in KNOWN_SECTION_LABELS:
@@ -249,6 +270,19 @@ def _parse_text(text: str) -> dict:
                         deduction = amount
                 pending_item_name = None
             else:
+                raw_amount = (
+                    line
+                    .replace(",", "")
+                    .replace("−", "-")
+                    .replace("△", "-")
+                    .replace("▲", "-")
+                )
+                try:
+                    amount = int(raw_amount)
+                except ValueError:
+                    continue
+                if abs(amount) < 10:
+                    continue
                 logger.warning("Amount without item name: %s", line)
             continue
 
@@ -267,6 +301,22 @@ def _parse_text(text: str) -> dict:
                 pending_item_name = None
                 continue
             name = re.sub(r"\d+$", "", m_first.group(2).strip())
+            if pending_item_name is not None:
+                prev_name = pending_item_name
+                items.append(PayslipItem(name=prev_name, amount=amount, section=current_section))
+                if prev_name in GROSS_KEYS:
+                    gross = amount
+                if prev_name in NET_KEYS:
+                    net = amount
+                if prev_name in DEDUCTION_KEYS:
+                    deduction = amount
+
+                if name and name not in KNOWN_METADATA_LABELS and not any(unit in name for unit in QUANTITY_UNITS):
+                    pending_item_name = name
+                else:
+                    pending_item_name = None
+                continue
+
             if not name:
                 pending_item_name = None
                 continue
@@ -277,7 +327,7 @@ def _parse_text(text: str) -> dict:
                 logger.info("Skipping quantity unit item: %s", name)
                 pending_item_name = None
                 continue
-            if abs(amount) < 10:
+            if abs(amount) < 10 and not pending_item_name:
                 logger.warning("Skipping suspicious small amount %s for %s", amount, name)
             else:
                 items.append(PayslipItem(name=name, amount=amount, section=current_section))
