@@ -18,6 +18,7 @@ class PayslipItem(BaseModel):
 
 class PayslipPreview(PayslipBase):
     items: list[PayslipItem] = []
+    warnings: list[str] | None = None
 
 class PayslipCreate(PayslipBase):
     items: list[PayslipItem] = []

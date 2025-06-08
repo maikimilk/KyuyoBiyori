@@ -185,3 +185,11 @@ def test_unknown_item_fallback():
     preview = resp.json()
     assert preview['items']
     assert preview['items'][0]['category'] in ['payment', 'deduction']
+
+
+def test_upload_warnings():
+    content = b'foo 100\nbar -10\n\xe6\x94\xaf\xe7\xb5\xa6\xe5\x90\x88\xe8\xa8\x88 50\n\xe5\xb7\xae\xe5\xbc\x95\xe6\x94\xaf\xe7\xb5\xa6\xe9\xa1\x8d 80'
+    resp = client.post('/api/payslip/upload', files={'file': ('warn.txt', content)})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get('warnings')
