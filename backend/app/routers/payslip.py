@@ -79,7 +79,7 @@ NET_KEYS = ("net", "手取り", "差引支給額")
 DEDUCTION_KEYS = ("deduction", "控除合計")
 TOTAL_KEYS = set(GROSS_KEYS) | set(NET_KEYS) | set(DEDUCTION_KEYS)
 TOTAL_KEYWORDS = re.compile(r"(合計|累計|差引|総支給)")
-_EXCLUDE_TOTAL = re.compile(r"(累計|対象額)")
+_TOTAL_EXCLUDE = re.compile(r"(累計|対象額|非課税)")
 
 # known item names for explicit categorization
 CATEGORY_MAP = {
@@ -253,14 +253,14 @@ def _parse_text(text: str) -> dict:
     def _handle_total_line(label: str, amt: int) -> bool:
         """Handle strict total labels. Return True if consumed."""
         nonlocal gross, net, deduction
+        if _TOTAL_EXCLUDE.search(label):
+            return True
         if re.match(r"当月(総)?支給額累計", label):
             gross = amt
             return True
         if re.fullmatch(r"口座振込額[:：]?", label):
             net = amt
             return True
-        if _EXCLUDE_TOTAL.search(label):
-            return False
         if "支給合計" in label or "総支給" in label:
             gross = amt
             return True
@@ -545,6 +545,14 @@ def _parse_text(text: str) -> dict:
             continue
 
         if amount_only.match(line):
+            if pending_names == ["支給合計"]:
+                gross = _clean_amount(line)
+                pending_names.clear()
+                continue
+            if pending_names == ["控除合計"]:
+                deduction = _clean_amount(line)
+                pending_names.clear()
+                continue
             if pending_names:
                 if pending_section:
                     current_section = pending_section
@@ -952,6 +960,14 @@ def _consistency_check(
     return errors
 
 
+def _warn_inconsistent(gross: int | None, deduction: int | None, net: int | None) -> list[str]:
+    warnings: list[str] = []
+    if gross is not None and deduction is not None and net is not None:
+        if gross - deduction != net:
+            warnings.append("支給合計 - 控除合計 と 差引支給額 が一致しません")
+    return warnings
+
+
 def _parse_file(content: bytes) -> dict:
     """Parse uploaded file using OCR when possible."""
     logger.debug("Parsing uploaded file")
@@ -969,14 +985,23 @@ def _parse_file(content: bytes) -> dict:
     parsed = _parse_text(text)
 
     parsed["items"] = _categorize_items(parsed["items"])
-    _post_process_totals(parsed)
     payments, deductions = _normalize_items(parsed["items"])
-    warnings = _consistency_check(
-        payments,
-        deductions,
-        parsed.get("gross_amount"),
-        parsed.get("net_amount"),
-    )
+
+    gross = parsed.get("gross_amount")
+    deduction = parsed.get("deduction_amount")
+    net = parsed.get("net_amount")
+
+    if gross is None:
+        gross = sum(i.amount for i in payments)
+        parsed["gross_amount"] = gross
+    if deduction is None:
+        deduction = sum(i.amount for i in deductions)
+        parsed["deduction_amount"] = deduction
+    if net is None:
+        net = gross - deduction
+        parsed["net_amount"] = net
+
+    warnings = _warn_inconsistent(gross, deduction, net)
     for w in warnings:
         logger.warning(w)
     parsed["warnings"] = warnings
@@ -1160,12 +1185,14 @@ def payslip_summary(db: Session = Depends(get_db)):
 
     net_this_month = sum_amount([p.net_amount for p in this_month])
     gross_this_month = sum_amount([p.gross_amount for p in this_month])
+    deduction_this_month = sum_amount([p.deduction_amount for p in this_month])
     net_prev_month = sum_amount([p.net_amount for p in prev_month])
     bonus_total = sum_amount([p.net_amount for p in bonus])
 
     return {
         "net_this_month": net_this_month,
         "gross_this_month": gross_this_month,
+        "deduction_this_month": deduction_this_month,
         "bonus_total": bonus_total,
         "diff_vs_prev_month": net_this_month - net_prev_month,
     }
