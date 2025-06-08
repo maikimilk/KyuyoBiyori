@@ -43,7 +43,8 @@ def get_db():
 _deduction_keywords = ['税', '保険', '控除', '料', '差引']
 
 # units that indicate quantities rather than monetary amounts
-QUANTITY_UNITS = ["日", "人", "時間", "回", "回数", "月", "週"]
+# "月" は給与明細のタイトルに自然に含まれるため除外する
+QUANTITY_UNITS = ["日", "人", "時間", "回", "回数", "週"]
 
 GROSS_KEYS = ('gross', '総支給', '支給総額', '支給合計', '総支給額')
 NET_KEYS = ('net', '手取り', '差引支給額')
@@ -154,8 +155,8 @@ def _parse_text(text: str) -> dict:
     items: list[PayslipItem] = []
     # allow OCR noise like newlines between name and value
     item_pattern = re.compile(
-        r"([\u3000-\u30FF\u4E00-\u9FAF\w\s\(\)]+?)[:：\s]*([\-−△▲]?\d[\d,]*)$"
-    )
+        r"([\u3000-\u30FF\u4E00-\u9FAF\w\s\(\)]+?)[:：\s]*([\-−△▲]?\d[\d,]*)"
+    )  # `$` を外して行末以外の金額も拾う
     amount_only_pattern = re.compile(r"^[\-−△▲]?\d[\d,]*$")
     amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
 
@@ -215,7 +216,7 @@ def _parse_text(text: str) -> dict:
             continue
 
         if amount_only_pattern.match(line):
-            if pending_item_name:
+            if pending_item_name is not None:
                 if pending_item_name in KNOWN_METADATA_LABELS:
                     pending_item_name = None
                     continue
@@ -266,6 +267,9 @@ def _parse_text(text: str) -> dict:
                 pending_item_name = None
                 continue
             name = re.sub(r"\d+$", "", m_first.group(2).strip())
+            if not name:
+                pending_item_name = None
+                continue
             if name in KNOWN_METADATA_LABELS:
                 pending_item_name = None
                 continue
