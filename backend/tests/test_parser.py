@@ -1,3 +1,4 @@
+import pytest
 from backend.app.routers.payslip import _categorize_items, _parse_text
 
 
@@ -191,3 +192,61 @@ def test_real_world_ocr_2():
     assert items.get("社員会費") == 100
     assert categories.get("本給") == "payment"
     assert categories.get("東友会費") == "deduction"
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("\uFFE5\uFF12\uFF16\uFF19,\uFF10\uFF10\uFF10 \u672C\u7D66", ("本給", 269000)),
+        ("(2,460) 所得税", ("所得税", -2460)),
+        ("+12,860 通勤費補助", ("通勤費補助", 12860)),
+    ],
+)
+def test_amount_variations(raw, expected):
+    result = _parse_text(raw)
+    items = {it.name: it.amount for it in result["items"]}
+    name, amount = expected
+    assert items.get(name) == amount
+
+
+def test_unit_before_number():
+    text = "日 21 所定労働日数"
+    result = _parse_text(text)
+    assert result["attendance"].get("所定労働日数") == 21
+
+
+def test_duplicate_item_names():
+    text = "時間外手当 30000\n時間外手当 15000"
+    result = _parse_text(text)
+    names = [it.name for it in result["items"]]
+    amounts = [it.amount for it in result["items"]]
+    assert names == ["時間外手当", "時間外手当"]
+    assert amounts == [30000, 15000]
+
+
+def test_amount_overflow_noise():
+    text = "111,111,111,111 本給"
+    result = _parse_text(text)
+    assert not result["items"]
+
+
+def test_halfwidth_kana_headers():
+    text = "ｼｷｭｳｺｳﾓｸ\n本給 100000"
+    result = _parse_text(text)
+    items = result["items"]
+    assert items and items[0].section == "payment"
+
+
+def test_line_break_between_unit_and_number():
+    text = "所定日数\n21\n日"
+    result = _parse_text(text)
+    assert result["attendance"].get("所定日数") == 21
+
+
+def test_section_header_omitted():
+    text = "所得税 2460 本給 269000"
+    result = _parse_text(text)
+    items = _categorize_items(result["items"])
+    mapping = {it.name: it.category for it in items}
+    assert mapping.get("所得税") == "deduction"
+    assert mapping.get("本給") == "payment"

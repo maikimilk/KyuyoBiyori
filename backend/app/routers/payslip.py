@@ -37,6 +37,27 @@ def get_db():
         db.close()
 
 
+# Characters to normalize (fullwidth to ascii)
+_TRANS_TABLE = str.maketrans({
+    "０": "0",
+    "１": "1",
+    "２": "2",
+    "３": "3",
+    "４": "4",
+    "５": "5",
+    "６": "6",
+    "７": "7",
+    "８": "8",
+    "９": "9",
+    "＋": "+",
+    "－": "-",
+    "（": "(",
+    "）": ")",
+    "，": ",",
+    "￥": "",
+    "¥": "",
+})
+
 _deduction_keywords = ["税", "保険", "控除", "料", "差引"]
 
 # units that indicate quantities rather than monetary amounts
@@ -105,6 +126,10 @@ KNOWN_SECTION_LABELS = [
     "雇保対象額",
     "退職金対象額",
     "年末調整対象額",
+    # 半角カナ見出しへの耐性
+    "ｼｷｭｳｺｳﾓｸ",
+    "ｺｳｼﾞｮｳｺｳﾓｸ",
+    "ｼｭｳｷﾞｮｳｺｳﾓｸ",
 ]
 
 # mapping of known section headers to internal section names
@@ -118,6 +143,9 @@ SECTION_MAP = {
     "勤務情報": "attendance",
     "当月欄": "当月",
     "年間累計欄": "年間累計",
+    "ｼｷｭｳｺｳﾓｸ": "payment",
+    "ｺｳｼﾞｮｳｺｳﾓｸ": "deduction",
+    "ｼｭｳｷﾞｮｳｺｳﾓｸ": "attendance",
 }
 
 # labels that contain employee metadata and should never become payslip items
@@ -187,21 +215,30 @@ def _parse_text(text: str) -> dict:
     attendance: dict[str, int] = {}
 
     # line patterns
-    item_amount = re.compile(r"^([^\d]+?)[：:\s]+([\-−△▲]?\d[\d,]*)$")
+    item_amount = re.compile(r"^([^\d]+?)[：:\s]+([^\s]+)$")
     item_attendance = re.compile(r"^([^\d]+?)[：:\s]+(\d+)(日|人|時間|回数?|週)$")
     item_attendance_inline = re.compile(r"^([^\d]+?)(\d+)(日|人|時間|回数?|週)$")
-    amount_only = re.compile(r"^[\-−△▲]?\d[\d,]*$")
+    amount_only = re.compile(r"^[\+\-−△▲]?\(?\d[\d,]*\)?$")
     value_with_unit = re.compile(r"^(\d+)(日|人|時間|回数?|週)$")
-    amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
+    amount_first_pattern = re.compile(
+        r"^[¥￥]?((?:\([\+\-−△▲]?\d[\d,]*\))|[\+\-−△▲]?\d[\d,]*)\s+(.+)$"
+    )
 
     def _clean_amount(s: str) -> int:
-        return int(
-            re.sub(rf"({'|'.join(QUANTITY_UNITS)})$", "", s)
-            .replace(",", "")
-            .replace("−", "-")
-            .replace("△", "-")
-            .replace("▲", "-")
-        )
+        s = s.translate(_TRANS_TABLE)
+        negative = False
+        if s.startswith("(") and s.endswith(")"):
+            negative = True
+            s = s[1:-1]
+        s = re.sub(rf"({'|'.join(QUANTITY_UNITS)})$", "", s)
+        s = s.replace(",", "").replace("−", "-").replace("△", "-").replace("▲", "-")
+        digits = re.sub(r"\D", "", s)
+        if len(digits) > 9:
+            raise ValueError("overflow")
+        amount = int(s)
+        if negative:
+            amount = -amount
+        return amount
 
     current_section = None
     pending_names: list[str] = []
@@ -218,6 +255,17 @@ def _parse_text(text: str) -> dict:
             if name in SECTION_MAP:
                 current_section = SECTION_MAP[name]
                 i += 1
+                continue
+            # unit before number pattern: "日 21 所定労働日数"
+            if (
+                name in QUANTITY_UNITS
+                and i < len(tokens) - 2
+                and re.fullmatch(r"\d+", tokens[i + 1])
+            ):
+                amount = int(tokens[i + 1])
+                attendance[tokens[i + 2]] = amount
+                handled = True
+                i += 3
                 continue
             # quantity with explicit unit separated by space
             if (
@@ -287,7 +335,7 @@ def _parse_text(text: str) -> dict:
         return handled
 
     for raw_line in text.splitlines():
-        line = raw_line.strip()
+        line = raw_line.strip().translate(_TRANS_TABLE)
         if not line:
             continue
 
