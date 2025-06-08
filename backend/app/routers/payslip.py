@@ -66,7 +66,7 @@ _TRANS_TABLE = str.maketrans(
     }
 )
 
-_deduction_keywords = ["税", "保険", "控除", "料", "差引"]
+_deduction_keywords = ["税", "保険", "控除", "料", "差引", "保険料改定", "精算"]
 
 # units that indicate quantities rather than monetary amounts
 # "月" は給与明細のタイトルに自然に含まれるため除外する
@@ -255,20 +255,21 @@ def _parse_text(text: str) -> dict:
         nonlocal gross, net, deduction
         if _TOTAL_EXCLUDE.search(label):
             return True
-        if re.match(r"当月(総)?支給額累計", label):
-            gross = amt
-            return True
-        if re.fullmatch(r"口座振込額[:：]?", label):
-            net = amt
-            return True
         if "支給合計" in label or "総支給" in label:
-            gross = amt
+            if gross is None:
+                gross = amt
             return True
         if "控除合計" in label and "差引" not in label:
-            deduction = amt
+            if deduction is None:
+                deduction = amt
             return True
         if "差引支給額" in label or "手取り" in label:
-            net = amt
+            if net is None:
+                net = amt
+            return True
+        if re.fullmatch(r"口座振込額[:：]?", label):
+            if net is None:
+                net = amt
             return True
         return False
 
@@ -1228,6 +1229,8 @@ def payslip_stats(
 
     labels = sorted(grouped.keys())
     data = [grouped[k] for k in labels]
+    if all(v == 0 for v in data):
+        return {"labels": [], "data": []}
     return {"labels": labels, "data": data}
 
 

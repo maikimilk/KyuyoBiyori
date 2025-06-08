@@ -15,7 +15,7 @@ export default function Home() {
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const { data: stats } = useSWR(`/api/payslip/stats?target=${target}&period=${period}`, fetcher);
 
-  const hasData = !!(stats && stats.labels && stats.labels.length > 0);
+  const hasData = stats?.data?.some(v => v !== 0);
   const chartData = {
     labels: stats?.labels || [],
     datasets: [
@@ -43,7 +43,7 @@ export default function Home() {
           </Stat>
           <Stat>
             <StatLabel>今月控除</StatLabel>
-            <StatNumber>{summary ? summary.deduction_this_month ?? 0 : '--'}円</StatNumber>
+            <StatNumber>{summary?.deduction_this_month ?? '--'}円</StatNumber>
           </Stat>
           <Stat>
             <StatLabel>賞与累計</StatLabel>
@@ -74,7 +74,7 @@ export default function Home() {
             </Tabs>
           </React.Fragment>
         ) : (
-          <Text color="gray.500">アップロードしてはじめよう！</Text>
+          <Text color="gray.500">データなし</Text>
         )
         }
       </Stack>
