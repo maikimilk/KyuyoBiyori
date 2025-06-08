@@ -95,3 +95,11 @@ def test_multi_pair_and_section_category():
     assert categories.get("東友会費") == "deduction"
     assert categories.get("共済会費") == "deduction"
     assert len(items) == 4
+
+
+def test_section_with_colon_and_split_lines():
+    text = "支給項目:\n本給\n269000\n控除項目：\n所得税\n2460"
+    result = _parse_text(text)
+    items = {it.name: (it.amount, it.section) for it in result["items"]}
+    assert items.get("本給") == (269000, "payment")
+    assert items.get("所得税") == (2460, "deduction")

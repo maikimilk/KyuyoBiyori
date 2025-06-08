@@ -216,13 +216,18 @@ def _parse_text(text: str) -> dict:
             pending_names.clear()
             continue
 
-        if line in SECTION_MAP:
-            current_section = SECTION_MAP[line]
+        matched_section = None
+        for sec_label, sec_name in SECTION_MAP.items():
+            if re.fullmatch(rf"{re.escape(sec_label)}[：:]*", line):
+                matched_section = sec_name
+                break
+        if matched_section:
+            current_section = matched_section
             pending_names.clear()
             continue
 
-        if line in KNOWN_SECTION_LABELS:
-            cleaned = re.sub(r"\d+$", "", line.strip())
+        if any(re.fullmatch(rf"{re.escape(lbl)}[：:]*\d*", line) for lbl in KNOWN_SECTION_LABELS):
+            cleaned = re.sub(r"[\d：:]+$", "", line.strip())
             if cleaned:
                 pending_names.append(cleaned)
             else:
