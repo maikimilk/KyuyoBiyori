@@ -71,7 +71,7 @@ export default function PayslipDetail() {
       body: JSON.stringify({ ...data, items }),
     });
     if (res.ok) {
-      router.push('/history');
+      router.push('/');
     }
   };
 
@@ -82,7 +82,11 @@ export default function PayslipDetail() {
       <Stack spacing={4}>
         <Heading as="h1" size="lg">{data.filename}</Heading>
         {data.warnings && data.warnings.length > 0 && (
-          <Badge colorScheme="red">⚠ 内訳と合計が一致しません</Badge>
+          <Stack>
+            {data.warnings.map((w: string, i: number) => (
+              <Badge key={i} colorScheme="red">⚠ {w}</Badge>
+            ))}
+          </Stack>
         )}
         <Flex gap={4} align="flex-start" direction={{ base: 'column', md: 'row' }}>
           <Box flex="1" minW="200px">
