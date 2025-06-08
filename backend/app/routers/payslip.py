@@ -248,7 +248,7 @@ def _parse_text(text: str) -> dict:
                 pending_items.clear()
                 continue
             section = current_section
-            if ATTENDANCE_PATTERN.search(name):
+            if section is None and ATTENDANCE_PATTERN.search(name):
                 section = "attendance"
 
             if name in TOTAL_KEYS:
@@ -281,7 +281,7 @@ def _parse_text(text: str) -> dict:
                     pending_items.clear()
                     continue
                 section = current_section
-                if ATTENDANCE_PATTERN.search(name):
+                if section is None and ATTENDANCE_PATTERN.search(name):
                     section = "attendance"
                 if name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
@@ -351,7 +351,7 @@ def _parse_text(text: str) -> dict:
                 pending_items.clear()
                 continue
             section = current_section
-            if ATTENDANCE_PATTERN.search(name):
+            if section is None and ATTENDANCE_PATTERN.search(name):
                 section = "attendance"
             if name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
