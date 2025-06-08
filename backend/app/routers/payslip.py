@@ -189,13 +189,13 @@ def _extract_text_with_vision(content: bytes) -> str:
 def _parse_text(text: str) -> dict:
     gross = net = deduction = None
     items: list[PayslipItem] = []
-    # allow OCR noise like newlines between name and value
-    item_pattern = re.compile(
-        r"^([^\d]+?)[:：\s]+([\-−△▲]?\d[\d,]*)$"
-    )
-    amount_only_pattern = re.compile(
-        rf"^[\-−△▲]?\d[\d,]*(?:{'|'.join(QUANTITY_UNITS)})?$"
-    )
+    attendance: dict[str, int] = {}
+
+    # line patterns
+    item_amount = re.compile(r"^([^\d]+?)[：:\s]+([\-−△▲]?\d[\d,]*)$")
+    item_attendance = re.compile(r"^([^\d]+?)[：:\s]+(\d+)(日|人|時間|回数?|週)$")
+    amount_only = re.compile(r"^[\-−△▲]?\d[\d,]*$")
+    value_with_unit = re.compile(r"^(\d+)(日|人|時間|回数?|週)$")
     amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
 
     def _clean_amount(s: str) -> int:
@@ -208,8 +208,9 @@ def _parse_text(text: str) -> dict:
         )
 
     current_section = None
-    pending_items: list[str] = []
+    pending_name: str | None = None
     reset_sections = ("支給合計", "控除合計", "差引支給額")
+
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -217,87 +218,92 @@ def _parse_text(text: str) -> dict:
 
         if line in reset_sections:
             current_section = None
-            pending_items.clear()
+            pending_name = None
             continue
 
         if line in SECTION_MAP:
             current_section = SECTION_MAP[line]
-            pending_items.clear()
+            pending_name = None
             continue
+
         if line in KNOWN_SECTION_LABELS:
-            pending_items.clear()
+            pending_name = None
             continue
 
         if any(line.startswith(lbl) for lbl in KNOWN_METADATA_LABELS):
-            pending_items.clear()
+            pending_name = None
             continue
 
-        m = item_pattern.match(line)
+        m_att = item_attendance.match(line)
+        if m_att:
+            name, value, _u = m_att.groups()
+            attendance[name.strip()] = int(value)
+            pending_name = None
+            continue
+
+        m = item_amount.match(line)
         if m:
-            name = re.sub(r"\d+$", "", m.group(1).strip())
-            name = name.strip()
-            if not name:
-                pending_items.clear()
-                continue
-            if name in KNOWN_METADATA_LABELS:
-                pending_items.clear()
+            name, value = m.groups()
+            name = re.sub(r"\d+$", "", name.strip())
+            if not name or name in KNOWN_METADATA_LABELS:
+                pending_name = None
                 continue
             try:
-                amount = _clean_amount(m.group(2))
+                amount = _clean_amount(value)
             except ValueError:
-                pending_items.clear()
+                pending_name = None
                 continue
             section = current_section
-            if section is None and ATTENDANCE_PATTERN.search(name):
-                section = "attendance"
-
-            if name in TOTAL_KEYS:
+            if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                attendance[name] = amount
+            elif name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
-                pending_items.clear()
-                continue
-            elif section != "attendance" and abs(amount) < 10:
-                logger.warning(
-                    "Skipping suspicious small amount %s for %s", amount, name
-                )
             else:
-                items.append(PayslipItem(name=name, amount=amount, section=section))
-            pending_items.clear()
+                if section != "attendance" and abs(amount) < 10:
+                    logger.warning(
+                        "Skipping suspicious small amount %s for %s", amount, name
+                    )
+                else:
+                    items.append(PayslipItem(name=name, amount=amount, section=section))
+            pending_name = None
             continue
 
-        if amount_only_pattern.match(line):
-            if pending_items and pending_items[0] in KNOWN_METADATA_LABELS:
-                pending_items.pop(0)
-                continue
-            if pending_items:
-                name = pending_items.pop(0)
+        if value_with_unit.match(line) and pending_name:
+            v, _u = value_with_unit.match(line).groups()
+            attendance[pending_name] = int(v)
+            pending_name = None
+            continue
+
+        if amount_only.match(line):
+            if pending_name:
+                name = pending_name
+                pending_name = None
                 try:
                     amount = _clean_amount(line)
                 except ValueError:
-                    pending_items.clear()
                     continue
                 section = current_section
-                if section is None and ATTENDANCE_PATTERN.search(name):
-                    section = "attendance"
-                if name in TOTAL_KEYS:
+                if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                    attendance[name] = amount
+                elif name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
                         gross = amount
                     if name in NET_KEYS:
                         net = amount
                     if name in DEDUCTION_KEYS:
                         deduction = amount
-                    pending_items.clear()
-                    continue
-                elif section != "attendance" and abs(amount) < 10:
-                    logger.warning(
-                        "Skipping suspicious small amount %s for %s", amount, name
-                    )
                 else:
-                    items.append(PayslipItem(name=name, amount=amount, section=section))
+                    if section != "attendance" and abs(amount) < 10:
+                        logger.warning(
+                            "Skipping suspicious small amount %s for %s", amount, name
+                        )
+                    else:
+                        items.append(PayslipItem(name=name, amount=amount, section=section))
             else:
                 try:
                     amount = _clean_amount(line)
@@ -313,77 +319,65 @@ def _parse_text(text: str) -> dict:
             try:
                 amount = _clean_amount(m_first.group(1))
             except ValueError:
-                pending_items.clear()
+                pending_name = None
                 continue
             name = re.sub(r"\d+$", "", m_first.group(2).strip())
-            if pending_items:
-                prev_name = pending_items.pop(0)
+            if pending_name:
+                prev_name = pending_name
                 section_prev = current_section
-                if ATTENDANCE_PATTERN.search(prev_name):
-                    section_prev = "attendance"
-                if section_prev != "attendance" and abs(amount) < 10:
-                    logger.warning(
-                        "Skipping suspicious small amount %s for %s", amount, prev_name
-                    )
+                if section_prev == "attendance" or ATTENDANCE_PATTERN.search(prev_name) or prev_name in QUANTITY_UNITS:
+                    attendance[prev_name] = amount
+                elif prev_name in TOTAL_KEYS:
+                    if prev_name in GROSS_KEYS:
+                        gross = amount
+                    if prev_name in NET_KEYS:
+                        net = amount
+                    if prev_name in DEDUCTION_KEYS:
+                        deduction = amount
                 else:
-                    if prev_name in TOTAL_KEYS:
-                        if prev_name in GROSS_KEYS:
-                            gross = amount
-                        if prev_name in NET_KEYS:
-                            net = amount
-                        if prev_name in DEDUCTION_KEYS:
-                            deduction = amount
-                        continue
-                    else:
-                        items.append(
-                            PayslipItem(
-                                name=prev_name, amount=amount, section=section_prev
-                            )
+                    if section_prev != "attendance" and abs(amount) < 10:
+                        logger.warning(
+                            "Skipping suspicious small amount %s for %s", amount, prev_name
                         )
-
-                if name and name not in KNOWN_METADATA_LABELS:
-                    pending_items.append(name)
+                    else:
+                        items.append(PayslipItem(name=prev_name, amount=amount, section=section_prev))
+                pending_name = name if name and name not in KNOWN_METADATA_LABELS else None
                 continue
 
-            if not name:
-                continue
-            if name in KNOWN_METADATA_LABELS:
-                pending_items.clear()
+            if not name or name in KNOWN_METADATA_LABELS:
+                pending_name = None
                 continue
             section = current_section
-            if section is None and ATTENDANCE_PATTERN.search(name):
-                section = "attendance"
-            if name in TOTAL_KEYS:
+            if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                attendance[name] = amount
+            elif name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
                     net = amount
                 if name in DEDUCTION_KEYS:
                     deduction = amount
-                pending_items.clear()
-                continue
-            elif section != "attendance" and abs(amount) < 10 and not pending_items:
-                logger.warning(
-                    "Skipping suspicious small amount %s for %s", amount, name
-                )
             else:
-                items.append(PayslipItem(name=name, amount=amount, section=section))
+                if section != "attendance" and abs(amount) < 10 and not pending_name:
+                    logger.warning(
+                        "Skipping suspicious small amount %s for %s", amount, name
+                    )
+                else:
+                    items.append(PayslipItem(name=name, amount=amount, section=section))
             continue
 
-        # treat as item name only (possibly with trailing digits)
-        item_name = re.sub(r"\d+$", "", line).strip()
-        if not item_name:
+        if re.match(r"^[^\d]+$", line):
+            pending_name = line.strip()
             continue
-        if item_name in KNOWN_METADATA_LABELS:
-            pending_items.clear()
-            continue
-        pending_items.append(item_name)
+
+        pending_name = None
 
     return {
         "items": items,
         "gross_amount": gross,
         "net_amount": net,
         "deduction_amount": deduction,
+        "attendance": attendance,
     }
 
 
