@@ -23,8 +23,14 @@ except Exception as e:  # pragma: no cover - library optional during tests
     logger.warning("Google Cloud Vision API not available: %s", e)
 
 from .. import database, models
-from ..schemas import (Payslip, PayslipCreate, PayslipItem, PayslipPreview,
-                       PayslipUpdate, ReparseRequest)
+from ..schemas import (
+    Payslip,
+    PayslipCreate,
+    PayslipItem,
+    PayslipPreview,
+    PayslipUpdate,
+    ReparseRequest,
+)
 
 router = APIRouter()
 
@@ -38,25 +44,27 @@ def get_db():
 
 
 # Characters to normalize (fullwidth to ascii)
-_TRANS_TABLE = str.maketrans({
-    "０": "0",
-    "１": "1",
-    "２": "2",
-    "３": "3",
-    "４": "4",
-    "５": "5",
-    "６": "6",
-    "７": "7",
-    "８": "8",
-    "９": "9",
-    "＋": "+",
-    "－": "-",
-    "（": "(",
-    "）": ")",
-    "，": ",",
-    "￥": "",
-    "¥": "",
-})
+_TRANS_TABLE = str.maketrans(
+    {
+        "０": "0",
+        "１": "1",
+        "２": "2",
+        "３": "3",
+        "４": "4",
+        "５": "5",
+        "６": "6",
+        "７": "7",
+        "８": "8",
+        "９": "9",
+        "＋": "+",
+        "－": "-",
+        "（": "(",
+        "）": ")",
+        "，": ",",
+        "￥": "",
+        "¥": "",
+    }
+)
 
 _deduction_keywords = ["税", "保険", "控除", "料", "差引"]
 
@@ -71,6 +79,7 @@ NET_KEYS = ("net", "手取り", "差引支給額")
 DEDUCTION_KEYS = ("deduction", "控除合計")
 TOTAL_KEYS = set(GROSS_KEYS) | set(NET_KEYS) | set(DEDUCTION_KEYS)
 TOTAL_KEYWORDS = re.compile(r"(合計|累計|差引|総支給)")
+_EXCLUDE_TOTAL = re.compile(r"(累計|対象額)")
 
 # known item names for explicit categorization
 CATEGORY_MAP = {
@@ -244,6 +253,8 @@ def _parse_text(text: str) -> dict:
     def _handle_total_line(label: str, amt: int) -> bool:
         """Handle strict total labels. Return True if consumed."""
         nonlocal gross, net, deduction
+        if _EXCLUDE_TOTAL.search(label):
+            return False
         if "支給合計" in label or "総支給" in label:
             gross = amt
             return True
@@ -326,11 +337,10 @@ def _parse_text(text: str) -> dict:
                         deduction = amount
                 else:
                     clean_name = re.sub(r"\d+$", "", name)
-                    category = (
-                        CATEGORY_MAP.get(clean_name)
-                        or (
-                            "payment" if current_section == "payment" else "deduction" if current_section == "deduction" else None
-                        )
+                    category = CATEGORY_MAP.get(clean_name) or (
+                        "payment"
+                        if current_section == "payment"
+                        else "deduction" if current_section == "deduction" else None
                     )
                     if current_section != "attendance" and abs(amount) < 10:
                         logger.warning(
@@ -362,7 +372,11 @@ def _parse_text(text: str) -> dict:
                             continue
                     else:
                         cleaned = re.sub(r"\d+$", "", nm)
-                        if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                        if (
+                            cleaned
+                            and cleaned not in KNOWN_METADATA_LABELS
+                            and cleaned not in KNOWN_SECTION_LABELS
+                        ):
                             pending_names.append(cleaned)
                             handled = True
                             i += 1
@@ -372,14 +386,18 @@ def _parse_text(text: str) -> dict:
                     if pending_section:
                         current_section = pending_section
                         pending_section = None
-                    category = (
-                        CATEGORY_MAP.get(nm)
-                        or (
-                            "payment" if current_section == "payment" else "deduction" if current_section == "deduction" else None
-                        )
+                    category = CATEGORY_MAP.get(nm) or (
+                        "payment"
+                        if current_section == "payment"
+                        else "deduction" if current_section == "deduction" else None
                     )
                     items.append(
-                        PayslipItem(name=nm, amount=amount, category=category, section=current_section)
+                        PayslipItem(
+                            name=nm,
+                            amount=amount,
+                            category=category,
+                            section=current_section,
+                        )
                     )
                     handled = True
                     i += 1
@@ -414,7 +432,10 @@ def _parse_text(text: str) -> dict:
                 continue
             line = remainder
 
-        if any(re.fullmatch(rf"{re.escape(lbl)}[：:]*\d*", line) for lbl in KNOWN_SECTION_LABELS):
+        if any(
+            re.fullmatch(rf"{re.escape(lbl)}[：:]*\d*", line)
+            for lbl in KNOWN_SECTION_LABELS
+        ):
             cleaned = re.sub(r"[\d：:]+$", "", line.strip())
             if cleaned:
                 pending_names.append(cleaned)
@@ -786,7 +807,12 @@ def _parse_text(text: str) -> dict:
                 if m_name_amount:
                     name, val = m_name_amount.groups()
                     digits = re.sub(r"\D", "", val)
-                    if ("," in val or len(digits) >= 2) and name and name not in KNOWN_METADATA_LABELS and name not in KNOWN_SECTION_LABELS:
+                    if (
+                        ("," in val or len(digits) >= 2)
+                        and name
+                        and name not in KNOWN_METADATA_LABELS
+                        and name not in KNOWN_SECTION_LABELS
+                    ):
                         if pending_section:
                             current_section = pending_section
                             pending_section = None
@@ -797,10 +823,17 @@ def _parse_text(text: str) -> dict:
                             i += 1
                             continue
                         category = (
-                            "payment" if section == "payment" else "deduction" if section == "deduction" else None
+                            "payment"
+                            if section == "payment"
+                            else "deduction" if section == "deduction" else None
                         )
                         items.append(
-                            PayslipItem(name=name, amount=amount, category=category, section=section)
+                            PayslipItem(
+                                name=name,
+                                amount=amount,
+                                category=category,
+                                section=section,
+                            )
                         )
                         handled = True
                         i += 1
@@ -837,9 +870,11 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
     for it in items:
         category = it.category or CATEGORY_MAP.get(it.name)
         if not category:
-            if it.section == "attendance" or ATTENDANCE_PATTERN.search(it.name):
+            if it.amount < 0:
+                category = "deduction"
+            elif it.section == "attendance" or ATTENDANCE_PATTERN.search(it.name):
                 category = "attendance"
-            elif it.amount < 0 or any(k in it.name for k in _deduction_keywords):
+            elif any(k in it.name for k in _deduction_keywords):
                 category = "deduction"
             else:
                 category = "payment"
@@ -856,7 +891,13 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
         ):
             category = "attendance"
         section = it.section or (
-            "attendance" if category == "attendance" else "payment" if category == "payment" else "deduction" if category == "deduction" else None
+            "attendance"
+            if category == "attendance"
+            else (
+                "payment"
+                if category == "payment"
+                else "deduction" if category == "deduction" else None
+            )
         )
         categorized.append(
             PayslipItem(
@@ -868,6 +909,15 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
             )
         )
     return categorized
+
+
+def _post_process_totals(parsed: dict) -> None:
+    """Fill missing total amounts based on other values."""
+    gross = parsed.get("gross_amount")
+    net = parsed.get("net_amount")
+    deduction = parsed.get("deduction_amount")
+    if net is None and gross is not None and deduction is not None:
+        parsed["net_amount"] = gross - deduction
 
 
 def _parse_file(content: bytes) -> dict:
@@ -887,6 +937,7 @@ def _parse_file(content: bytes) -> dict:
     parsed = _parse_text(text)
 
     parsed["items"] = _categorize_items(parsed["items"])
+    _post_process_totals(parsed)
     parsed["text"] = text
     return parsed
 
@@ -906,6 +957,32 @@ def _parse_date(date_str: str | None) -> date | None:
     raise HTTPException(status_code=400, detail="Invalid date format")
 
 
+def _to_iso(d: date | None) -> str | None:
+    return d.isoformat() if d else None
+
+
+def _schema_from_model(p: models.Payslip) -> Payslip:
+    return Payslip(
+        id=p.id,
+        filename=p.filename,
+        date=_to_iso(p.date),
+        type=p.type,
+        gross_amount=p.gross_amount,
+        net_amount=p.net_amount,
+        deduction_amount=p.deduction_amount,
+        items=[
+            PayslipItem(
+                id=it.id,
+                name=it.name,
+                amount=it.amount,
+                category=it.category,
+                section=it.section,
+            )
+            for it in p.items
+        ],
+    )
+
+
 @router.post("/upload", response_model=PayslipPreview)
 async def upload_payslip(
     file: UploadFile = File(...),
@@ -915,7 +992,7 @@ async def upload_payslip(
     slip_type = _detect_slip_type(parsed.get("text", ""))
     return PayslipPreview(
         filename=file.filename,
-        date=None,
+        date=_to_iso(parsed.get("date")),
         type=slip_type,
         gross_amount=parsed.get("gross_amount"),
         net_amount=parsed.get("net_amount"),
@@ -948,12 +1025,13 @@ def save_payslip(data: PayslipCreate, db: Session = Depends(get_db)):
         db.add(item)
     db.commit()
     db.refresh(payslip)
-    return payslip
+    return _schema_from_model(payslip)
 
 
 @router.get("/", response_model=list[Payslip])
 def list_payslips(db: Session = Depends(get_db)):
-    return db.query(models.Payslip).all()
+    records = db.query(models.Payslip).all()
+    return [_schema_from_model(p) for p in records]
 
 
 @router.get("/list", response_model=list[Payslip])
@@ -969,7 +1047,8 @@ def list_filtered_payslips(
         query = query.filter(models.Payslip.date >= start, models.Payslip.date <= end)
     if kind:
         query = query.filter(models.Payslip.type == kind)
-    return query.all()
+    records = query.all()
+    return [_schema_from_model(p) for p in records]
 
 
 @router.delete("/delete")
@@ -1017,7 +1096,7 @@ def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
         )
     db.commit()
     db.refresh(payslip)
-    return payslip
+    return _schema_from_model(payslip)
 
 
 @router.get("/summary")
@@ -1138,4 +1217,4 @@ def get_payslip(payslip_id: int, db: Session = Depends(get_db)):
     payslip = db.query(models.Payslip).get(payslip_id)
     if not payslip:
         raise HTTPException(status_code=404, detail="Not found")
-    return payslip
+    return _schema_from_model(payslip)
