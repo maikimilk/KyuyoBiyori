@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Literal
 
 class PayslipBase(BaseModel):
     filename: str
@@ -12,7 +13,7 @@ class PayslipItem(BaseModel):
     id: int | None = None
     name: str
     amount: int
-    category: str | None = None
+    category: Literal['payment', 'deduction', 'net', 'attendance', 'skip'] | None = None
     section: str | None = None
 
 class PayslipPreview(PayslipBase):
