@@ -177,3 +177,11 @@ def test_export_and_settings_update():
     upd = client.post('/api/settings/update', json={'theme_color': '#ffffff'})
     assert upd.status_code == 200
     assert upd.json()['theme_color'] == '#ffffff'
+
+
+def test_unknown_item_fallback():
+    resp = client.post('/api/payslip/upload', files={'file': ('unk.txt', b'FooBar:30')})
+    assert resp.status_code == 200
+    preview = resp.json()
+    assert preview['items']
+    assert preview['items'][0]['category'] in ['payment', 'deduction']

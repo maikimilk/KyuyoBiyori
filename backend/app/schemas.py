@@ -13,6 +13,7 @@ class PayslipItem(BaseModel):
     name: str
     amount: int
     category: str | None = None
+    section: str | None = None
 
 class PayslipPreview(PayslipBase):
     items: list[PayslipItem] = []
