@@ -1,12 +1,13 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from datetime import date, datetime, timedelta
-from typing import Optional
-from sqlalchemy import func
-from collections import defaultdict
 import logging
 import re
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 # Ensure INFO level logs are emitted even when root logger level is higher
@@ -21,15 +22,9 @@ except Exception as e:  # pragma: no cover - library optional during tests
     _vision_available = False
     logger.warning("Google Cloud Vision API not available: %s", e)
 
-from ..schemas import (
-    PayslipCreate,
-    PayslipUpdate,
-    Payslip,
-    PayslipPreview,
-    PayslipItem,
-    ReparseRequest,
-)
-from .. import models, database
+from .. import database, models
+from ..schemas import (Payslip, PayslipCreate, PayslipItem, PayslipPreview,
+                       PayslipUpdate, ReparseRequest)
 
 router = APIRouter()
 
@@ -258,7 +253,11 @@ def _parse_text(text: str) -> dict:
                 pending_names.clear()
                 continue
             section = current_section
-            if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+            if (
+                section == "attendance"
+                or ATTENDANCE_PATTERN.search(name)
+                or name in QUANTITY_UNITS
+            ):
                 attendance[name] = amount
             elif name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
@@ -273,7 +272,16 @@ def _parse_text(text: str) -> dict:
                         "Skipping suspicious small amount %s for %s", amount, name
                     )
                 else:
-                    items.append(PayslipItem(name=name, amount=amount, section=section))
+                    category = (
+                        "payment"
+                        if section == "payment"
+                        else "deduction" if section == "deduction" else None
+                    )
+                    items.append(
+                        PayslipItem(
+                            name=name, amount=amount, category=category, section=section
+                        )
+                    )
             pending_names.clear()
             continue
 
@@ -291,7 +299,11 @@ def _parse_text(text: str) -> dict:
                 except ValueError:
                     continue
                 section = current_section
-                if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                if (
+                    section == "attendance"
+                    or ATTENDANCE_PATTERN.search(name)
+                    or name in QUANTITY_UNITS
+                ):
                     attendance[name] = amount
                 elif name in TOTAL_KEYS:
                     if name in GROSS_KEYS:
@@ -306,7 +318,19 @@ def _parse_text(text: str) -> dict:
                             "Skipping suspicious small amount %s for %s", amount, name
                         )
                     else:
-                        items.append(PayslipItem(name=name, amount=amount, section=section))
+                        category = (
+                            "payment"
+                            if section == "payment"
+                            else "deduction" if section == "deduction" else None
+                        )
+                        items.append(
+                            PayslipItem(
+                                name=name,
+                                amount=amount,
+                                category=category,
+                                section=section,
+                            )
+                        )
             else:
                 try:
                     amount = _clean_amount(line)
@@ -328,7 +352,11 @@ def _parse_text(text: str) -> dict:
             if pending_names:
                 prev_name = pending_names.pop(0)
                 section_prev = current_section
-                if section_prev == "attendance" or ATTENDANCE_PATTERN.search(prev_name) or prev_name in QUANTITY_UNITS:
+                if (
+                    section_prev == "attendance"
+                    or ATTENDANCE_PATTERN.search(prev_name)
+                    or prev_name in QUANTITY_UNITS
+                ):
                     attendance[prev_name] = amount
                 elif prev_name in TOTAL_KEYS:
                     if prev_name in GROSS_KEYS:
@@ -340,10 +368,24 @@ def _parse_text(text: str) -> dict:
                 else:
                     if section_prev != "attendance" and abs(amount) < 10:
                         logger.warning(
-                            "Skipping suspicious small amount %s for %s", amount, prev_name
+                            "Skipping suspicious small amount %s for %s",
+                            amount,
+                            prev_name,
                         )
                     else:
-                        items.append(PayslipItem(name=prev_name, amount=amount, section=section_prev))
+                        category_prev = (
+                            "payment"
+                            if section_prev == "payment"
+                            else "deduction" if section_prev == "deduction" else None
+                        )
+                        items.append(
+                            PayslipItem(
+                                name=prev_name,
+                                amount=amount,
+                                category=category_prev,
+                                section=section_prev,
+                            )
+                        )
                 if name and name not in KNOWN_METADATA_LABELS:
                     pending_names.append(name)
                 continue
@@ -352,7 +394,11 @@ def _parse_text(text: str) -> dict:
                 pending_names.clear()
                 continue
             section = current_section
-            if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+            if (
+                section == "attendance"
+                or ATTENDANCE_PATTERN.search(name)
+                or name in QUANTITY_UNITS
+            ):
                 attendance[name] = amount
             elif name in TOTAL_KEYS:
                 if name in GROSS_KEYS:
@@ -367,12 +413,25 @@ def _parse_text(text: str) -> dict:
                         "Skipping suspicious small amount %s for %s", amount, name
                     )
                 else:
-                    items.append(PayslipItem(name=name, amount=amount, section=section))
+                    category = (
+                        "payment"
+                        if section == "payment"
+                        else "deduction" if section == "deduction" else None
+                    )
+                    items.append(
+                        PayslipItem(
+                            name=name, amount=amount, category=category, section=section
+                        )
+                    )
             continue
 
         if re.match(r"^[^\d]+$", line):
             cleaned = re.sub(r"\d+$", "", line.strip())
-            if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+            if (
+                cleaned
+                and cleaned not in KNOWN_METADATA_LABELS
+                and cleaned not in KNOWN_SECTION_LABELS
+            ):
                 pending_names.append(cleaned)
             continue
 
@@ -397,7 +456,11 @@ def _parse_text(text: str) -> dict:
                     except ValueError:
                         continue
                     section = current_section
-                    if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                    if (
+                        section == "attendance"
+                        or ATTENDANCE_PATTERN.search(name)
+                        or name in QUANTITY_UNITS
+                    ):
                         attendance[name] = amount
                     elif name in TOTAL_KEYS:
                         if name in GROSS_KEYS:
@@ -409,10 +472,24 @@ def _parse_text(text: str) -> dict:
                     else:
                         if section != "attendance" and abs(amount) < 10:
                             logger.warning(
-                                "Skipping suspicious small amount %s for %s", amount, name
+                                "Skipping suspicious small amount %s for %s",
+                                amount,
+                                name,
                             )
                         else:
-                            items.append(PayslipItem(name=name, amount=amount, section=section))
+                            category = (
+                                "payment"
+                                if section == "payment"
+                                else "deduction" if section == "deduction" else None
+                            )
+                            items.append(
+                                PayslipItem(
+                                    name=name,
+                                    amount=amount,
+                                    category=category,
+                                    section=section,
+                                )
+                            )
                 else:
                     try:
                         amount = _clean_amount(token)
@@ -426,7 +503,11 @@ def _parse_text(text: str) -> dict:
 
             if re.match(r"^[^\d]+$", token):
                 cleaned = re.sub(r"\d+$", "", token)
-                if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                if (
+                    cleaned
+                    and cleaned not in KNOWN_METADATA_LABELS
+                    and cleaned not in KNOWN_SECTION_LABELS
+                ):
                     pending_names.append(cleaned)
                 handled = True
                 continue
@@ -434,7 +515,11 @@ def _parse_text(text: str) -> dict:
             # token that mixes digits and text, treat as name with trailing digits removed
             if re.search(r"\d", token):
                 cleaned = re.sub(r"\d+$", "", token)
-                if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                if (
+                    cleaned
+                    and cleaned not in KNOWN_METADATA_LABELS
+                    and cleaned not in KNOWN_SECTION_LABELS
+                ):
                     pending_names.append(cleaned)
                 handled = True
 
