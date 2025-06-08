@@ -208,7 +208,7 @@ def _parse_text(text: str) -> dict:
         )
 
     current_section = None
-    pending_name: str | None = None
+    pending_names: list[str] = []
     reset_sections = ("支給合計", "控除合計", "差引支給額")
 
     for raw_line in text.splitlines():
@@ -218,27 +218,31 @@ def _parse_text(text: str) -> dict:
 
         if line in reset_sections:
             current_section = None
-            pending_name = None
+            pending_names.clear()
             continue
 
         if line in SECTION_MAP:
             current_section = SECTION_MAP[line]
-            pending_name = None
+            pending_names.clear()
             continue
 
         if line in KNOWN_SECTION_LABELS:
-            pending_name = None
+            cleaned = re.sub(r"\d+$", "", line.strip())
+            if cleaned:
+                pending_names.append(cleaned)
+            else:
+                pending_names.clear()
             continue
 
         if any(line.startswith(lbl) for lbl in KNOWN_METADATA_LABELS):
-            pending_name = None
+            pending_names.clear()
             continue
 
         m_att = item_attendance.match(line)
         if m_att:
             name, value, _u = m_att.groups()
             attendance[name.strip()] = int(value)
-            pending_name = None
+            pending_names.clear()
             continue
 
         m = item_amount.match(line)
@@ -246,12 +250,12 @@ def _parse_text(text: str) -> dict:
             name, value = m.groups()
             name = re.sub(r"\d+$", "", name.strip())
             if not name or name in KNOWN_METADATA_LABELS:
-                pending_name = None
+                pending_names.clear()
                 continue
             try:
                 amount = _clean_amount(value)
             except ValueError:
-                pending_name = None
+                pending_names.clear()
                 continue
             section = current_section
             if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
@@ -270,19 +274,18 @@ def _parse_text(text: str) -> dict:
                     )
                 else:
                     items.append(PayslipItem(name=name, amount=amount, section=section))
-            pending_name = None
+            pending_names.clear()
             continue
 
-        if value_with_unit.match(line) and pending_name:
+        if value_with_unit.match(line) and pending_names:
             v, _u = value_with_unit.match(line).groups()
-            attendance[pending_name] = int(v)
-            pending_name = None
+            name = pending_names.pop(0)
+            attendance[name] = int(v)
             continue
 
         if amount_only.match(line):
-            if pending_name:
-                name = pending_name
-                pending_name = None
+            if pending_names:
+                name = pending_names.pop(0)
                 try:
                     amount = _clean_amount(line)
                 except ValueError:
@@ -319,11 +322,11 @@ def _parse_text(text: str) -> dict:
             try:
                 amount = _clean_amount(m_first.group(1))
             except ValueError:
-                pending_name = None
+                pending_names.clear()
                 continue
             name = re.sub(r"\d+$", "", m_first.group(2).strip())
-            if pending_name:
-                prev_name = pending_name
+            if pending_names:
+                prev_name = pending_names.pop(0)
                 section_prev = current_section
                 if section_prev == "attendance" or ATTENDANCE_PATTERN.search(prev_name) or prev_name in QUANTITY_UNITS:
                     attendance[prev_name] = amount
@@ -341,11 +344,12 @@ def _parse_text(text: str) -> dict:
                         )
                     else:
                         items.append(PayslipItem(name=prev_name, amount=amount, section=section_prev))
-                pending_name = name if name and name not in KNOWN_METADATA_LABELS else None
+                if name and name not in KNOWN_METADATA_LABELS:
+                    pending_names.append(name)
                 continue
 
             if not name or name in KNOWN_METADATA_LABELS:
-                pending_name = None
+                pending_names.clear()
                 continue
             section = current_section
             if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
@@ -358,7 +362,7 @@ def _parse_text(text: str) -> dict:
                 if name in DEDUCTION_KEYS:
                     deduction = amount
             else:
-                if section != "attendance" and abs(amount) < 10 and not pending_name:
+                if section != "attendance" and abs(amount) < 10 and not pending_names:
                     logger.warning(
                         "Skipping suspicious small amount %s for %s", amount, name
                     )
@@ -367,10 +371,77 @@ def _parse_text(text: str) -> dict:
             continue
 
         if re.match(r"^[^\d]+$", line):
-            pending_name = line.strip()
+            cleaned = re.sub(r"\d+$", "", line.strip())
+            if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                pending_names.append(cleaned)
             continue
 
-        pending_name = None
+        # Token-based fallback for lines containing multiple pairs
+        tokens = re.split(r"\s+", line)
+        handled = False
+        for token in tokens:
+            if not token:
+                continue
+            m_val = value_with_unit.match(token)
+            if m_val and pending_names:
+                v, _u = m_val.groups()
+                name = pending_names.pop(0)
+                attendance[name] = int(v)
+                handled = True
+                continue
+            if amount_only.match(token):
+                if pending_names:
+                    name = pending_names.pop(0)
+                    try:
+                        amount = _clean_amount(token)
+                    except ValueError:
+                        continue
+                    section = current_section
+                    if section == "attendance" or ATTENDANCE_PATTERN.search(name) or name in QUANTITY_UNITS:
+                        attendance[name] = amount
+                    elif name in TOTAL_KEYS:
+                        if name in GROSS_KEYS:
+                            gross = amount
+                        if name in NET_KEYS:
+                            net = amount
+                        if name in DEDUCTION_KEYS:
+                            deduction = amount
+                    else:
+                        if section != "attendance" and abs(amount) < 10:
+                            logger.warning(
+                                "Skipping suspicious small amount %s for %s", amount, name
+                            )
+                        else:
+                            items.append(PayslipItem(name=name, amount=amount, section=section))
+                else:
+                    try:
+                        amount = _clean_amount(token)
+                    except ValueError:
+                        continue
+                    if abs(amount) < 10:
+                        continue
+                    logger.warning("Amount without item name: %s", token)
+                handled = True
+                continue
+
+            if re.match(r"^[^\d]+$", token):
+                cleaned = re.sub(r"\d+$", "", token)
+                if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                    pending_names.append(cleaned)
+                handled = True
+                continue
+
+            # token that mixes digits and text, treat as name with trailing digits removed
+            if re.search(r"\d", token):
+                cleaned = re.sub(r"\d+$", "", token)
+                if cleaned and cleaned not in KNOWN_METADATA_LABELS and cleaned not in KNOWN_SECTION_LABELS:
+                    pending_names.append(cleaned)
+                handled = True
+
+        if handled:
+            continue
+
+        pending_names.clear()
 
     return {
         "items": items,
