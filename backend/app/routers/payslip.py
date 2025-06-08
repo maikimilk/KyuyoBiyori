@@ -118,7 +118,7 @@ def _parse_text(text: str) -> dict:
         except ValueError:
             continue
 
-        items.append(PayslipItem(name=name, amount=amount, category=current_section))
+        items.append(PayslipItem(name=name, amount=amount, section=current_section))
         if name in GROSS_KEYS:
             gross = amount
         if name in NET_KEYS:
@@ -143,8 +143,16 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
                 category = 'deduction'
             else:
                 category = 'payment'
+            if it.name not in CATEGORY_MAP:
+                logger.info("Unknown item name encountered: %s -> %s", it.name, category)
         categorized.append(
-            PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category)
+            PayslipItem(
+                id=it.id,
+                name=it.name,
+                amount=it.amount,
+                category=category,
+                section=it.section,
+            )
         )
     return categorized
 
@@ -268,7 +276,15 @@ def reparse_payslip(data: ReparseRequest):
     items = []
     for it in data.items:
         category = 'deduction' if it.amount < 0 else 'payment'
-        items.append(PayslipItem(id=it.id, name=it.name, amount=it.amount, category=category))
+        items.append(
+            PayslipItem(
+                id=it.id,
+                name=it.name,
+                amount=it.amount,
+                category=category,
+                section=it.section,
+            )
+        )
     return items
 
 
