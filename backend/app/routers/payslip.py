@@ -128,22 +128,25 @@ def _detect_slip_type(text: str) -> str | None:
     if not text:
         return None
 
-    header = text.splitlines()[0][:20]
+    lines = text.splitlines()
+    header = lines[0][:20] if lines else ''
+
+    slip_type = None
     if '賞与支給明細書' in header:
-        return 'bonus'
-    if '給与支給明細書' in header:
-        return 'salary'
+        slip_type = 'bonus'
+    elif '給与支給明細書' in header:
+        slip_type = 'salary'
+    elif re.search(r'^\s*賞与[額支給]?', header):
+        slip_type = 'bonus'
+    elif re.search(r'^\s*給与[額支給]?', header):
+        slip_type = 'salary'
 
-    if re.search(r'^\s*賞与[額支給]?', header):
-        return 'bonus'
-    if re.search(r'^\s*給与[額支給]?', header):
-        return 'salary'
-
-    if '賞与' in text or 'bonus' in text.lower():
-        return 'bonus'
-    if '給与' in text or 'salary' in text.lower():
-        return 'salary'
-    return None
+    if slip_type is None:
+        if '賞与' in text or 'bonus' in text.lower():
+            slip_type = 'bonus'
+        elif '給与' in text or 'salary' in text.lower():
+            slip_type = 'salary'
+    return slip_type
 
 
 def _extract_text_with_vision(content: bytes) -> str:
@@ -203,6 +206,10 @@ def _parse_text(text: str) -> dict:
         m = item_pattern.search(line)
         if m:
             name = re.sub(r"\d+$", "", m.group(1).strip())
+            name = name.strip()
+            if not name:
+                pending_item_name = None
+                continue
             if name in KNOWN_METADATA_LABELS:
                 pending_item_name = None
                 continue
@@ -237,10 +244,10 @@ def _parse_text(text: str) -> dict:
             continue
 
         if amount_only_pattern.match(line):
+            if pending_item_name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
             if pending_item_name is not None:
-                if pending_item_name in KNOWN_METADATA_LABELS:
-                    pending_item_name = None
-                    continue
                 if any(unit in pending_item_name for unit in QUANTITY_UNITS):
                     logger.info("Skipping quantity unit item: %s", pending_item_name)
                     pending_item_name = None
@@ -341,16 +348,17 @@ def _parse_text(text: str) -> dict:
             continue
 
         # treat as item name only (possibly with trailing digits)
-        item_name = re.sub(r"\d+$", "", line)
-        if item_name:
-            if item_name in KNOWN_METADATA_LABELS:
-                pending_item_name = None
-                continue
-            if any(unit in item_name for unit in QUANTITY_UNITS):
-                logger.info("Skipping quantity unit item: %s", item_name)
-                pending_item_name = None
-                continue
-            pending_item_name = item_name
+        item_name = re.sub(r"\d+$", "", line).strip()
+        if not item_name:
+            continue
+        if item_name in KNOWN_METADATA_LABELS:
+            pending_item_name = None
+            continue
+        if any(unit in item_name for unit in QUANTITY_UNITS):
+            logger.info("Skipping quantity unit item: %s", item_name)
+            pending_item_name = None
+            continue
+        pending_item_name = item_name
 
     return {
         'items': items,
