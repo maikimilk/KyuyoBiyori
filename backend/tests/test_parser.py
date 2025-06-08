@@ -46,3 +46,12 @@ def test_item_line_pattern_with_amount_at_end():
     assert any(it.name == '通勤費補助' and it.amount == 12860 for it in items)
     assert any(it.name == '通勤費補助' and it.category == 'payment' for it in items)
 
+
+def test_amount_first_with_pending_name_queue():
+    text = "課税対象額\n口座振込額1\n135,545 雇保対象額\n218,919\n148,405"
+    result = _parse_text(text)
+    names = [it.name for it in result['items']]
+    amounts = [it.amount for it in result['items']]
+    assert names == ['課税対象額', '口座振込額', '雇保対象額']
+    assert amounts == [135545, 218919, 148405]
+    assert all(it.name for it in result['items'])
