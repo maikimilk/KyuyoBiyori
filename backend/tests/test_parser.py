@@ -31,11 +31,11 @@ def test_amount_first_pattern():
     assert any(it.name == '雇用保険料' and it.amount == -12345 for it in items)
 
 
-def test_quantity_unit_skipped():
+def test_quantity_unit_as_attendance():
     text = "日 10\n基本給 100000"
     result = _parse_text(text)
     items = _categorize_items(result['items'])
-    assert all(it.name != '日' for it in items)
+    assert any(it.name == '日' and it.category == 'attendance' for it in items)
     assert any(it.name == '基本給' for it in items)
 
 

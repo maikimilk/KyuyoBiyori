@@ -45,6 +45,8 @@ _deduction_keywords = ['税', '保険', '控除', '料', '差引']
 # units that indicate quantities rather than monetary amounts
 # "月" は給与明細のタイトルに自然に含まれるため除外する
 QUANTITY_UNITS = ["日", "人", "時間", "回", "回数", "週"]
+# pattern to detect attendance items such as "欠勤日数" or "残業時間"
+ATTENDANCE_PATTERN = re.compile(r"(日数|時間|回数?|人|週)$")
 
 GROSS_KEYS = ('gross', '総支給', '支給総額', '支給合計', '総支給額')
 NET_KEYS = ('net', '手取り', '差引支給額')
@@ -106,6 +108,19 @@ KNOWN_SECTION_LABELS = [
     '退職金対象額',
     '年末調整対象額',
 ]
+
+# mapping of known section headers to internal section names
+SECTION_MAP = {
+    '支給項目': 'payment',
+    '控除項目': 'deduction',
+    '就業項目': 'attendance',
+    '勤怠項目': 'attendance',
+    '勤怠明細': 'attendance',
+    '勤怠情報': 'attendance',
+    '勤務情報': 'attendance',
+    '当月欄': '当月',
+    '年間累計欄': '年間累計',
+}
 
 # labels that contain employee metadata and should never become payslip items
 KNOWN_METADATA_LABELS = [
@@ -193,10 +208,8 @@ def _parse_text(text: str) -> dict:
 
         if line in KNOWN_SECTION_LABELS:
             pending_item_name = None
-            if '支給項目' in line:
-                current_section = 'payment'
-            elif '控除項目' in line:
-                current_section = 'deduction'
+            if line in SECTION_MAP:
+                current_section = SECTION_MAP[line]
             continue
 
         if any(line.startswith(lbl) for lbl in KNOWN_METADATA_LABELS):
@@ -213,10 +226,6 @@ def _parse_text(text: str) -> dict:
             if name in KNOWN_METADATA_LABELS:
                 pending_item_name = None
                 continue
-            if any(unit in name for unit in QUANTITY_UNITS):
-                logger.info("Skipping quantity unit item: %s", name)
-                pending_item_name = None
-                continue
             raw_amount = (
                 m.group(2)
                 .replace(",", "")
@@ -229,11 +238,14 @@ def _parse_text(text: str) -> dict:
             except ValueError:
                 pending_item_name = None
                 continue
+            section = current_section
+            if ATTENDANCE_PATTERN.search(name):
+                section = 'attendance'
 
-            if abs(amount) < 10:
+            if section != 'attendance' and abs(amount) < 10:
                 logger.warning("Skipping suspicious small amount %s for %s", amount, name)
             else:
-                items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                items.append(PayslipItem(name=name, amount=amount, section=section))
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
@@ -248,10 +260,6 @@ def _parse_text(text: str) -> dict:
                 pending_item_name = None
                 continue
             if pending_item_name is not None:
-                if any(unit in pending_item_name for unit in QUANTITY_UNITS):
-                    logger.info("Skipping quantity unit item: %s", pending_item_name)
-                    pending_item_name = None
-                    continue
                 name = pending_item_name
                 raw_amount = (
                     line
@@ -265,10 +273,13 @@ def _parse_text(text: str) -> dict:
                 except ValueError:
                     pending_item_name = None
                     continue
-                if abs(amount) < 10:
+                section = current_section
+                if ATTENDANCE_PATTERN.search(name):
+                    section = 'attendance'
+                if section != 'attendance' and abs(amount) < 10:
                     logger.warning("Skipping suspicious small amount %s for %s", amount, name)
                 else:
-                    items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                    items.append(PayslipItem(name=name, amount=amount, section=section))
                     if name in GROSS_KEYS:
                         gross = amount
                     if name in NET_KEYS:
@@ -310,15 +321,21 @@ def _parse_text(text: str) -> dict:
             name = re.sub(r"\d+$", "", m_first.group(2).strip())
             if pending_item_name is not None:
                 prev_name = pending_item_name
-                items.append(PayslipItem(name=prev_name, amount=amount, section=current_section))
-                if prev_name in GROSS_KEYS:
-                    gross = amount
-                if prev_name in NET_KEYS:
-                    net = amount
-                if prev_name in DEDUCTION_KEYS:
-                    deduction = amount
+                section_prev = current_section
+                if ATTENDANCE_PATTERN.search(prev_name):
+                    section_prev = 'attendance'
+                if section_prev != 'attendance' and abs(amount) < 10:
+                    logger.warning("Skipping suspicious small amount %s for %s", amount, prev_name)
+                else:
+                    items.append(PayslipItem(name=prev_name, amount=amount, section=section_prev))
+                    if prev_name in GROSS_KEYS:
+                        gross = amount
+                    if prev_name in NET_KEYS:
+                        net = amount
+                    if prev_name in DEDUCTION_KEYS:
+                        deduction = amount
 
-                if name and name not in KNOWN_METADATA_LABELS and not any(unit in name for unit in QUANTITY_UNITS):
+                if name and name not in KNOWN_METADATA_LABELS:
                     pending_item_name = name
                 else:
                     pending_item_name = None
@@ -330,14 +347,13 @@ def _parse_text(text: str) -> dict:
             if name in KNOWN_METADATA_LABELS:
                 pending_item_name = None
                 continue
-            if any(unit in name for unit in QUANTITY_UNITS):
-                logger.info("Skipping quantity unit item: %s", name)
-                pending_item_name = None
-                continue
-            if abs(amount) < 10 and not pending_item_name:
+            section = current_section
+            if ATTENDANCE_PATTERN.search(name):
+                section = 'attendance'
+            if section != 'attendance' and abs(amount) < 10 and not pending_item_name:
                 logger.warning("Skipping suspicious small amount %s for %s", amount, name)
             else:
-                items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                items.append(PayslipItem(name=name, amount=amount, section=section))
                 if name in GROSS_KEYS:
                     gross = amount
                 if name in NET_KEYS:
@@ -352,10 +368,6 @@ def _parse_text(text: str) -> dict:
         if not item_name:
             continue
         if item_name in KNOWN_METADATA_LABELS:
-            pending_item_name = None
-            continue
-        if any(unit in item_name for unit in QUANTITY_UNITS):
-            logger.info("Skipping quantity unit item: %s", item_name)
             pending_item_name = None
             continue
         pending_item_name = item_name
@@ -373,7 +385,9 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
     for it in items:
         category = it.category or CATEGORY_MAP.get(it.name)
         if not category:
-            if it.amount < 0 or any(k in it.name for k in _deduction_keywords):
+            if it.section == 'attendance' or ATTENDANCE_PATTERN.search(it.name):
+                category = 'attendance'
+            elif it.amount < 0 or any(k in it.name for k in _deduction_keywords):
                 category = 'deduction'
             else:
                 category = 'payment'
