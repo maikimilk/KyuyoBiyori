@@ -265,6 +265,9 @@ def _parse_text(text: str) -> dict:
         handled = False
         i = 0
         while i < len(tokens) - 1:
+            if pending_section:
+                current_section = pending_section
+                pending_section = None
             name = tokens[i].rstrip("：:")
             next_tok = tokens[i + 1]
             if name in SECTION_MAP:
@@ -414,6 +417,12 @@ def _parse_text(text: str) -> dict:
             pending_names.clear()
             continue
 
+        if line.count(" ") >= 3 and sum(ch.isdigit() for ch in line) >= 2:
+            tokens = [t for t in re.split(r"\s+", line) if t]
+            if parse_token_pairs(tokens):
+                pending_names.clear()
+                continue
+
         m = item_amount.match(line)
         if m:
             if pending_section:
@@ -427,6 +436,10 @@ def _parse_text(text: str) -> dict:
             try:
                 amount = _clean_amount(value)
             except ValueError:
+                tokens = [t for t in re.split(r"\s+", line) if t]
+                if parse_token_pairs(tokens):
+                    pending_names.clear()
+                    continue
                 pending_names.clear()
                 continue
             section = current_section
@@ -640,6 +653,9 @@ def _parse_text(text: str) -> dict:
             handled = False
             i = 0
             while i < len(tokens):
+                if pending_section:
+                    current_section = pending_section
+                    pending_section = None
                 token = tokens[i]
                 m_val = value_with_unit.match(token)
                 if m_val:
@@ -781,6 +797,12 @@ def _categorize_items(items: list[PayslipItem]) -> list[PayslipItem]:
                 )
         if category == "skip":
             continue
+        if category == "payment" and any(k in it.name for k in _deduction_keywords):
+            category = "deduction"
+        if category != "attendance" and (
+            it.section == "attendance" or ATTENDANCE_PATTERN.search(it.name)
+        ):
+            category = "attendance"
         section = it.section or (
             "attendance" if category == "attendance" else "payment" if category == "payment" else "deduction" if category == "deduction" else None
         )
