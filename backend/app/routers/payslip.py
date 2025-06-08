@@ -94,6 +94,21 @@ KNOWN_SECTION_LABELS = [
     '年末調整対象額',
 ]
 
+# labels that contain employee metadata and should never become payslip items
+KNOWN_METADATA_LABELS = [
+    '社員番号',
+    '氏名',
+    '資格',
+    '所属',
+    '役職',
+    '事業所名',
+    '部門名',
+    '部署',
+    '支店名',
+    '住所',
+    '電話番号',
+]
+
 
 def _detect_slip_type(text: str) -> str | None:
     """Heuristically detect payslip type from OCR text."""
@@ -131,6 +146,7 @@ def _parse_text(text: str) -> dict:
         r"([^\d\-−△▲\s:：\n\r]{2,})[\s:：]*([\-−△▲]?\d[\d,]*)"
     )
     amount_only_pattern = re.compile(r"^[\-−△▲]?\d[\d,]*$")
+    amount_first_pattern = re.compile(r"^([\-−△▲]?\d[\d,]*)\s+(.+)$")
 
     current_section = None
     pending_item_name: str | None = None
@@ -147,9 +163,16 @@ def _parse_text(text: str) -> dict:
                 current_section = 'deduction'
             continue
 
+        if any(line.startswith(lbl) for lbl in KNOWN_METADATA_LABELS):
+            pending_item_name = None
+            continue
+
         m = item_pattern.search(line)
         if m:
             name = re.sub(r"\d+$", "", m.group(1).strip())
+            if name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
             raw_amount = (
                 m.group(2)
                 .replace(",", "")
@@ -178,6 +201,9 @@ def _parse_text(text: str) -> dict:
 
         if amount_only_pattern.match(line):
             if pending_item_name:
+                if pending_item_name in KNOWN_METADATA_LABELS:
+                    pending_item_name = None
+                    continue
                 name = pending_item_name
                 raw_amount = (
                     line
@@ -206,9 +232,43 @@ def _parse_text(text: str) -> dict:
                 logger.warning("Amount without item name: %s", line)
             continue
 
+        m_first = amount_first_pattern.match(line)
+        if m_first:
+            raw_amount = (
+                m_first.group(1)
+                .replace(",", "")
+                .replace("−", "-")
+                .replace("△", "-")
+                .replace("▲", "-")
+            )
+            try:
+                amount = int(raw_amount)
+            except ValueError:
+                pending_item_name = None
+                continue
+            name = re.sub(r"\d+$", "", m_first.group(2).strip())
+            if name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
+            if abs(amount) < 10:
+                logger.warning("Skipping suspicious small amount %s for %s", amount, name)
+            else:
+                items.append(PayslipItem(name=name, amount=amount, section=current_section))
+                if name in GROSS_KEYS:
+                    gross = amount
+                if name in NET_KEYS:
+                    net = amount
+                if name in DEDUCTION_KEYS:
+                    deduction = amount
+            pending_item_name = None
+            continue
+
         # treat as item name only (possibly with trailing digits)
         item_name = re.sub(r"\d+$", "", line)
         if item_name:
+            if item_name in KNOWN_METADATA_LABELS:
+                pending_item_name = None
+                continue
             pending_item_name = item_name
 
     return {

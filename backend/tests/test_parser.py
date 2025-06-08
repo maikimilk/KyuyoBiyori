@@ -15,3 +15,18 @@ def test_parse_split_lines():
     items = result['items']
     assert any(it.name == '基本給' and it.amount == 200000 for it in items)
 
+
+def test_metadata_skipped():
+    text = "社員番号 4020\n氏名 山田太郎\n基本給 100000"
+    result = _parse_text(text)
+    items = result['items']
+    assert all(it.name != '社員番号' and it.name != '氏名' for it in items)
+    assert any(it.name == '基本給' and it.amount == 100000 for it in items)
+
+
+def test_amount_first_pattern():
+    text = "-12345 雇用保険料"
+    result = _parse_text(text)
+    items = result['items']
+    assert any(it.name == '雇用保険料' and it.amount == -12345 for it in items)
+
