@@ -935,6 +935,18 @@ def _post_process_totals(parsed: dict) -> None:
         parsed["net_amount"] = gross - deduction
 
 
+def _recalc_totals(payslip_dict: dict) -> None:
+    """Recalculate totals from items and overwrite the given dict."""
+    def _get(it, key):
+        return getattr(it, key, it.get(key))
+
+    payments = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "payment"]
+    deductions = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "deduction"]
+    payslip_dict["gross_amount"] = sum(payments)
+    payslip_dict["deduction_amount"] = sum(deductions)
+    payslip_dict["net_amount"] = payslip_dict["gross_amount"] - payslip_dict["deduction_amount"]
+
+
 def _normalize_items(items: list[PayslipItem]) -> tuple[list[PayslipItem], list[PayslipItem]]:
     """Return payment and deduction lists with negative amounts treated as deductions."""
     payments: list[PayslipItem] = []
@@ -1035,9 +1047,9 @@ def _schema_from_model(p: models.Payslip) -> Payslip:
         filename=p.filename,
         date=_to_iso(p.date),
         type=p.type,
-        gross_amount=p.gross_amount,
-        net_amount=p.net_amount,
-        deduction_amount=p.deduction_amount,
+        gross_amount=p.gross_amount or 0,
+        net_amount=p.net_amount or 0,
+        deduction_amount=p.deduction_amount or 0,
         items=[
             PayslipItem(
                 id=it.id,
@@ -1057,6 +1069,7 @@ async def upload_payslip(
 ):
     content = await file.read()
     parsed = _parse_file(content)
+    _recalc_totals(parsed)
     slip_type = _detect_slip_type(parsed.get("text", ""))
     return PayslipPreview(
         filename=file.filename,
@@ -1072,14 +1085,38 @@ async def upload_payslip(
 
 @router.post("/save", response_model=Payslip)
 def save_payslip(data: PayslipCreate, db: Session = Depends(get_db)):
-    date_obj = _parse_date(data.date)
+    payload = data.model_dump()
+    logger.info(
+        "SAVE incoming: gross=%s ded=%s net=%s",
+        payload.get("gross_amount"),
+        payload.get("deduction_amount"),
+        payload.get("net_amount"),
+    )
+    _recalc_totals(payload)
+    logger.info(
+        "SAVE fixed: gross=%s ded=%s net=%s",
+        payload["gross_amount"],
+        payload["deduction_amount"],
+        payload["net_amount"],
+    )
+
+    date_obj = _parse_date(payload.get("date"))
+    net = payload["net_amount"]
+    exists = (
+        db.query(models.Payslip)
+        .filter_by(date=date_obj, type=payload.get("type"), net_amount=net)
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="同じ明細が既に登録されています")
+
     payslip = models.Payslip(
-        filename=data.filename,
+        filename=payload["filename"],
         date=date_obj,
-        type=data.type,
-        gross_amount=data.gross_amount,
-        net_amount=data.net_amount,
-        deduction_amount=data.deduction_amount,
+        type=payload.get("type"),
+        gross_amount=payload["gross_amount"],
+        net_amount=payload["net_amount"],
+        deduction_amount=payload["deduction_amount"],
     )
     db.add(payslip)
     db.commit()
@@ -1152,12 +1189,27 @@ def update_payslip(data: PayslipUpdate, db: Session = Depends(get_db)):
     payslip = db.query(models.Payslip).get(data.id)
     if not payslip:
         raise HTTPException(status_code=404, detail="Not found")
-    payslip.filename = data.filename
-    payslip.date = _parse_date(data.date)
-    payslip.type = data.type
-    payslip.gross_amount = data.gross_amount
-    payslip.net_amount = data.net_amount
-    payslip.deduction_amount = data.deduction_amount
+    payload = data.model_dump()
+    logger.info(
+        "SAVE incoming: gross=%s ded=%s net=%s",
+        payload.get("gross_amount"),
+        payload.get("deduction_amount"),
+        payload.get("net_amount"),
+    )
+    _recalc_totals(payload)
+    logger.info(
+        "SAVE fixed: gross=%s ded=%s net=%s",
+        payload["gross_amount"],
+        payload["deduction_amount"],
+        payload["net_amount"],
+    )
+
+    payslip.filename = payload["filename"]
+    payslip.date = _parse_date(payload.get("date"))
+    payslip.type = payload.get("type")
+    payslip.gross_amount = payload["gross_amount"]
+    payslip.net_amount = payload["net_amount"]
+    payslip.deduction_amount = payload["deduction_amount"]
     payslip.items.clear()
     for it in data.items:
         payslip.items.append(
