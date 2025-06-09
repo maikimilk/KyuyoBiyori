@@ -79,7 +79,8 @@ export default function Upload() {
       deduction_amount: preview.deduction_amount
       })
     });
-    setStatus(`保存しました: 総支給額${preview.gross_amount}円 手取り${preview.net_amount}円`);
+    setPreview(null);
+    setStatus(`保存しました: 総支給額${preview.gross_amount}円 手取り${preview.net_amount}円\n今月もよく頑張りましたね！`);
   };
 
   return (

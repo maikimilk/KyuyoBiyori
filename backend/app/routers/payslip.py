@@ -81,6 +81,13 @@ TOTAL_KEYS = set(GROSS_KEYS) | set(NET_KEYS) | set(DEDUCTION_KEYS)
 TOTAL_KEYWORDS = re.compile(r"(合計|累計|差引|総支給)")
 _TOTAL_EXCLUDE = re.compile(r"(累計|対象額|非課税)")
 
+# section boundaries and lines to skip when parsing
+SECTION_BEGIN = {
+    "支給項目": ("payment", "支給合計"),
+    "控除項目": ("deduction", "控除合計"),
+}
+SKIP_PAT = re.compile(r"(標準報酬|保険料改定|対象額|累計|非課税)")
+
 # known item names for explicit categorization
 CATEGORY_MAP = {
     "健康保険料": "deduction",
@@ -274,6 +281,7 @@ def _parse_text(text: str) -> dict:
         return False
 
     current_section = None
+    until_marker: str | None = None
     pending_section: str | None = None
     pending_names: list[str] = []
     reset_sections = ("支給合計", "控除合計", "差引支給額")
@@ -415,6 +423,29 @@ def _parse_text(text: str) -> dict:
     for raw_line in text.splitlines():
         line = raw_line.strip().translate(_TRANS_TABLE)
         if not line:
+            continue
+
+        # section handling
+        matched_start = False
+        for hdr, (sec, end) in SECTION_BEGIN.items():
+            if line.startswith(hdr):
+                current_section = sec
+                until_marker = end
+                remainder = re.sub(rf"^{re.escape(hdr)}[：:]*\s*", "", line)
+                line = remainder
+                matched_start = True
+                break
+        if matched_start and not line:
+            continue
+        if until_marker and line.startswith(until_marker):
+            current_section = None
+            until_marker = None
+            remainder = re.sub(rf"^{re.escape(until_marker)}[：:]*\s*", "", line)
+            line = remainder
+            if not line:
+                continue
+
+        if SKIP_PAT.search(line):
             continue
 
         if line in reset_sections:
