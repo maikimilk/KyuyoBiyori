@@ -936,17 +936,32 @@ def _post_process_totals(parsed: dict) -> None:
 
 
 def _recalc_totals(payslip_dict: dict) -> None:
-    """Recalculate totals from items and overwrite the given dict."""
-    def _get(it, key):
-        if isinstance(it, dict):
-            return it.get(key)
-        return getattr(it, key, None)
+    """Recalculate totals from items.
 
-    payments = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "payment"]
-    deductions = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "deduction"]
-    payslip_dict["gross_amount"] = sum(payments)
-    payslip_dict["deduction_amount"] = sum(deductions)
-    payslip_dict["net_amount"] = payslip_dict["gross_amount"] - payslip_dict["deduction_amount"]
+    Items coming from the front-end may lack a ``category`` field.  In that
+    case we fall back to judging by the amount's sign.  If no payment or
+    deduction entries are found we keep the existing values to avoid
+    overwriting them with zeroes.
+    """
+
+    def _get(it, key):
+        return it.get(key) if isinstance(it, dict) else getattr(it, key, None)
+
+    payments: list[int] = []
+    deductions: list[int] = []
+    for it in payslip_dict.get("items", []):
+        amt = _get(it, "amount") or 0
+        cat = (_get(it, "category") or "").lower()
+        if cat == "payment" or (not cat and amt >= 0):
+            payments.append(amt)
+        elif cat == "deduction" or (not cat and amt < 0):
+            deductions.append(abs(amt))
+
+    if payments:
+        payslip_dict["gross_amount"] = sum(payments)
+    if deductions:
+        payslip_dict["deduction_amount"] = sum(deductions)
+    payslip_dict["net_amount"] = payslip_dict.get("gross_amount", 0) - payslip_dict.get("deduction_amount", 0)
 
 
 def _normalize_items(items: list[PayslipItem]) -> tuple[list[PayslipItem], list[PayslipItem]]:
