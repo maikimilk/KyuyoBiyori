@@ -938,7 +938,9 @@ def _post_process_totals(parsed: dict) -> None:
 def _recalc_totals(payslip_dict: dict) -> None:
     """Recalculate totals from items and overwrite the given dict."""
     def _get(it, key):
-        return getattr(it, key, it.get(key))
+        if isinstance(it, dict):
+            return it.get(key)
+        return getattr(it, key, None)
 
     payments = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "payment"]
     deductions = [_get(it, "amount") for it in payslip_dict.get("items", []) if _get(it, "category") == "deduction"]
