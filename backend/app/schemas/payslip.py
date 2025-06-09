@@ -7,6 +7,7 @@ class PayslipPreview(BaseModel):
     deduction_amount: int
     net_amount: int
     warnings: list[str] | None = None
+    items: list[dict] = []
 
 class PayslipCreate(BaseModel):
     filename: str
