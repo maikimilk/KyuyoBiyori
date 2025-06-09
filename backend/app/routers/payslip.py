@@ -50,18 +50,34 @@ async def upload(
     file: UploadFile = File(...),
     year_month: str | None = Form(None),
 ):
+    print("DEBUG FILE SIZE", file.filename, file.content_type)
+    content = await file.read()
+    print("DEBUG CONTENT LENGTH", len(content))
+
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
     try:
-        result = parser.parse(await file.read())
+        result = parser.parse(content)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+    warnings_safe = result.warnings if result.warnings is not None else []
+
     return PayslipPreview(
         filename=file.filename,
         gross_amount=result.gross,
         deduction_amount=result.deduction,
         net_amount=result.net,
-        warnings=result.warnings,
-        items=[],
+        warnings=warnings_safe,
+        items=[
+                {"name": "支給合計", "amount": result.gross},
+                {"name": "控除合計", "amount": result.deduction},
+                {"name": "差引支給額", "amount": result.net},
+        ],
     )
+
+
 
 
 @router.post("/save", response_model=PayslipRead)
