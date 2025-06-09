@@ -24,12 +24,13 @@ export default function Upload() {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const upload = async (f: File) => {
+  const upload = async (f: File, monthValue: string) => {
     setProgress(0);
     setStatus('アップロード中...');
     setError('');
     const form = new FormData();
     form.append('file', f);
+    form.append('year_month', monthValue);
     try {
       const res = await fetch('/api/payslip/upload', { method: 'POST', body: form });
       if (res.ok) {
@@ -52,7 +53,7 @@ export default function Upload() {
 
   const handleFile = (f: File) => {
     setFile(f);
-    upload(f);
+    upload(f, month);
   };
 
   const handleCancel = () => {
@@ -108,7 +109,7 @@ export default function Upload() {
             </SimpleGrid>
             <Flex gap={2} mt={2}>
               <Button colorScheme="teal" onClick={handleSave}>保存</Button>
-              <Button onClick={() => file && upload(file)}>再解析</Button>
+              <Button onClick={() => file && upload(file, month)}>再解析</Button>
             </Flex>
           </Box>
         )}
