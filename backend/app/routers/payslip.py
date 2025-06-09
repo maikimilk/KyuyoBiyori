@@ -60,6 +60,7 @@ async def upload(
         deduction_amount=result.deduction,
         net_amount=result.net,
         warnings=result.warnings,
+        items=[],
     )
 
 
