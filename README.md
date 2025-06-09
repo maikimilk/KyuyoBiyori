@@ -95,7 +95,8 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 3. Google Cloud Vision APIキーを.env.localへ
-NEXT_PUBLIC_GCLOUD_API_KEY=xxxxx
+NEXT_PUBLIC_GCLOUD_API_KEY=xxxxx  # フロントエンド用
+GCLOUD_API_KEY=xxxxx              # バックエンド用
 # 4. 依存インストール
 cd frontend && npm install && cd ..       # フロントエンド依存
 pip install -r backend/requirements.txt    # バックエンド依存
