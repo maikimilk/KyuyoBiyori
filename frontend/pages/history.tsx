@@ -104,12 +104,12 @@ export default function History() {
           </Thead>
           <Tbody>
             {filtered.map((p: any) => (
-              <Tr key={p.id}>
+              <Tr key={p.id} bg={!p.gross_amount ? 'yellow.50' : undefined}>
                 <Td>{p.date || '-'}</Td>
                 <Td>
                   <Tag colorScheme={p.type === 'bonus' ? 'pink' : 'teal'}>{p.type || '-'}</Tag>
                 </Td>
-                <Td isNumeric>{p.gross_amount?.toLocaleString()}</Td>
+                <Td isNumeric>{p.gross_amount ? p.gross_amount.toLocaleString() : '–'}</Td>
                 <Td isNumeric>{p.net_amount?.toLocaleString()}</Td>
                 <Td isNumeric>{p.deduction_amount?.toLocaleString()}</Td>
                 <Td>
