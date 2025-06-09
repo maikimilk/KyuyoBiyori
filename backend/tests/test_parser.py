@@ -17,3 +17,21 @@ def test_parse_without_gross():
     assert result.gross == 100
     assert result.net == 80
     assert result.deduction == 20
+
+
+def test_parse_without_deduction():
+    parser = TotalsOnlyParser()
+    data = "支給合計 120\n差引支給額 100".encode()
+    result = parser.parse(data)
+    assert result.gross == 120
+    assert result.deduction == 20
+    assert result.net == 100
+
+
+def test_parse_without_net():
+    parser = TotalsOnlyParser()
+    data = "支給合計 120\n控除合計 20".encode()
+    result = parser.parse(data)
+    assert result.gross == 120
+    assert result.deduction == 20
+    assert result.net == 100
