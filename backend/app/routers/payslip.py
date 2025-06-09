@@ -438,9 +438,10 @@ def _parse_text(text: str) -> dict:
         if matched_start and not line:
             continue
         if until_marker and line.startswith(until_marker):
+            marker = until_marker
             current_section = None
             until_marker = None
-            remainder = re.sub(rf"^{re.escape(until_marker)}[：:]*\s*", "", line)
+            remainder = re.sub(rf"^{re.escape(marker)}[：:]*\s*", "", line)
             line = remainder
             if not line:
                 continue
