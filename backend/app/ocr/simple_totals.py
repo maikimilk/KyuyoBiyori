@@ -3,10 +3,22 @@ import base64
 import os
 from .strategy import BaseParser, OCRResult
 
-TOTAL_PAT = re.compile(r"(支給合計|控除合計|差引支給額)[^\d\-]*([\-\d,()]+)")
+# allow matching of normal and full-width digits
+TOTAL_PAT = re.compile(
+    r"(支給合計|控除合計|差引支給額)[^\d０-９\-]*([\-\d０-９,，()]+)"
+)
+
+_FW_TO_ASCII = str.maketrans("０１２３４５６７８９－", "0123456789-")
+
+
+def _normalize_digits(s: str) -> str:
+    """Convert full-width digits and minus sign to ASCII equivalents."""
+    return s.translate(_FW_TO_ASCII)
+
 
 def _clean(n: str) -> int:
-    return int(n.replace(",", "").replace("(", "-").replace(")", ""))
+    n = _normalize_digits(n)
+    return int(n.replace(",", "").replace("，", "").replace("(", "-").replace(")", ""))
 
 def call_vision_api(content: bytes) -> str:
     """Return text from given image/PDF content using Google Cloud Vision API.

@@ -35,3 +35,12 @@ def test_parse_without_net():
     assert result.gross == 120
     assert result.deduction == 20
     assert result.net == 100
+
+
+def test_parse_fullwidth_digits():
+    parser = TotalsOnlyParser()
+    data = "支給合計 １００，０００\n控除合計 ２０，０００\n差引支給額 ８０，０００".encode()
+    result = parser.parse(data)
+    assert result.gross == 100000
+    assert result.deduction == 20000
+    assert result.net == 80000
