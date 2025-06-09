@@ -3,18 +3,18 @@ from typing import Optional
 
 class PayslipPreview(BaseModel):
     filename: str
-    gross: int
-    deduction: int
-    net: int
+    gross_amount: int
+    deduction_amount: int
+    net_amount: int
     warnings: list[str] | None = None
 
 class PayslipCreate(BaseModel):
     filename: str
     date: Optional[str] = None
     type: Optional[str] = None
-    gross: int
-    deduction: int
-    net: int
+    gross_amount: int
+    deduction_amount: int
+    net_amount: int
 
 class PayslipRead(PayslipCreate):
     id: int
