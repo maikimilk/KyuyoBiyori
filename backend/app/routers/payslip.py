@@ -150,3 +150,21 @@ def payslip_stats(
     if all(v == 0 for v in data):
         return {"labels": [], "data": []}
     return {"labels": labels, "data": data}
+
+
+@router.get("/{payslip_id}", response_model=PayslipRead)
+def get_one(payslip_id: int, db: Session = Depends(get_db)):
+    p = db.query(models.Payslip).get(payslip_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Not found")
+    return to_schema(p)
+
+
+@router.delete("/delete")
+def delete_payslip(payslip_id: int, db: Session = Depends(get_db)):
+    p = db.query(models.Payslip).get(payslip_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.delete(p)
+    db.commit()
+    return {"status": "deleted"}

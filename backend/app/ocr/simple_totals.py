@@ -24,6 +24,10 @@ class TotalsOnlyParser(BaseParser):
                 net = val
         if gross is None and net is not None and deduction is not None:
             gross = net + deduction
+        if deduction is None and gross is not None and net is not None:
+            deduction = gross - net
+        if net is None and gross is not None and deduction is not None:
+            net = gross - deduction
         if any(v is None for v in (gross, deduction, net)):
             raise ValueError("Totals not found")
         return OCRResult(gross=gross, deduction=deduction, net=net, text=text)
