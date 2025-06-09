@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
 import {
@@ -72,15 +72,20 @@ export default function PayslipDetail() {
       alert('未分類または金額未入力の項目があります');
       return;
     }
+    const normalized = items.map(it => ({
+      ...it,
+      category: it.category || (it.amount < 0 ? 'deduction' : 'payment'),
+    }));
     const res = await fetch('/api/payslip/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, items }),
+      body: JSON.stringify({ ...data, items: normalized }),
     });
     if (res.ok) {
       const updated = await res.json();
       setNetAmount(updated.net_amount);
       setSaved(true);
+      mutate('/api/payslip/list');
       toast({
         title: '保存しました',
         description: `総支給額 ${updated.gross_amount.toLocaleString()}円・手取り ${updated.net_amount.toLocaleString()}円`,
