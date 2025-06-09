@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import database, models
@@ -46,7 +46,10 @@ def to_schema(p: models.Payslip) -> PayslipRead:
 
 
 @router.post("/upload", response_model=PayslipPreview)
-async def upload(file: UploadFile = File(...)):
+async def upload(
+    file: UploadFile = File(...),
+    year_month: str | None = Form(None),
+):
     try:
         result = parser.parse(await file.read())
     except ValueError as e:
