@@ -2,11 +2,13 @@ import os
 import base64
 import json
 import requests
-
+from typing import List, Optional
+import re
 from .strategy import BaseParser, OCRResult
 from ..domain.item import Item
 
-PROMPT = """
+# ------------ 解析プロンプト ------------ #
+PROMPT = r"""
 You are an expert document parser.
 
 You will be given an image of a Japanese payslip.
@@ -67,62 +69,77 @@ Net amount may be shown as 差引支給額 or 口座振込額 — treat them the
 Please analyze the image and return structured output accordingly.
 """
 
+API_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/"
+    "v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+)
+
+
 class DetailedParser(BaseParser):
-def parse(self, content: bytes, mode: str = "detailed") -> OCRResult:
-assert mode == "detailed", "DetailedParser only supports detailed mode"
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set")
+    """Gemini-2.0-flash を用いた詳細パーサ"""
 
-    image_b64 = base64.b64encode(content).decode()
+    def parse(self, content: bytes, mode: str = "detailed") -> OCRResult:
+        if mode != "detailed":
+            raise ValueError("DetailedParser supports only detailed mode")
 
-    print("DEBUG Gemini API call starting...")
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY not set")
 
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    { "text": PROMPT },
-                    {
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": image_b64
-                        }
-                    }
-                ]
-            }
-        ]
-    }
+        # ---- 画像を Base64 で埋め込む ----
+        image_b64 = base64.b64encode(content).decode()
 
-    resp = requests.post(endpoint, json=payload, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": PROMPT},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": image_b64,
+                            }
+                        },
+                    ]
+                }
+            ]
+        }
 
-    print("DEBUG Gemini raw response:", json.dumps(data, ensure_ascii=False, indent=2))
+        endpoint = API_ENDPOINT.format(key=api_key)
+        resp = requests.post(endpoint, json=payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
 
-    # Extract the first candidate text content
-    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        # ---- Gemini からのテキスト抽出 ----
+        try:
+            raw_text = (
+                data["candidates"][0]["content"]["parts"][0]["text"]
+            )
+        except (KeyError, IndexError) as exc:
+            raise RuntimeError("Gemini API response shape changed") from exc
 
-    # Clean potential code fences ```json ... ``` that Gemini sometimes adds
-    raw_text = raw_text.strip()
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
+        # ```json ``` ガード削除
+        raw_text = raw_text.strip()
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("```", 2)[1].strip()
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3].rstrip()
 
-    print("DEBUG Gemini parsed text:", raw_text)
+        # ---- JSON 解析 ----
+        print("DEBUG GEMINI RAW TEXT:", raw_text)
 
-    parsed = json.loads(raw_text)
+        parsed = json.loads(raw_text)
 
-    return OCRResult(
-        gross=parsed["gross"],
-        deduction=parsed["deduction"],
-        net=parsed["net"],
-        text="[Gemini parsed]",
-        warnings=None,
-        items=[
-            Item(**item)
-            for item in parsed.get("items", [])
-        ],
-    )
+        # ---- items 配列を安全に構築 ----
+        items: Optional[List[Item]] = None
+        if isinstance(parsed.get("items"), list):
+            items = [Item(**it) for it in parsed["items"] if it.get("name")]
+
+        return OCRResult(
+            gross=int(parsed["gross"]),
+            deduction=int(parsed["deduction"]),
+            net=int(parsed["net"]),
+            text="[Gemini parsed]",
+            warnings=None,
+            items=items,
+        )

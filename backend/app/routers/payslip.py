@@ -79,12 +79,13 @@ async def upload(
         deduction_amount=result.deduction,
         net_amount=result.net,
         warnings=warnings_safe,
-        items=[
-                {"name": "支給合計", "amount": result.gross},
-                {"name": "控除合計", "amount": result.deduction},
-                {"name": "差引支給額", "amount": result.net},
+        items=result.items if result.items else [
+            {"name": "支給合計", "amount": result.gross, "category": "支給"},
+            {"name": "控除合計", "amount": result.deduction, "category": "控除"},
+            {"name": "差引支給額", "amount": result.net, "category": "支給"},
         ],
     )
+
 
 
 
