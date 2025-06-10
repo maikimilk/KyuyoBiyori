@@ -44,3 +44,21 @@ def test_parse_fullwidth_digits():
     assert result.gross == 100000
     assert result.deduction == 20000
     assert result.net == 80000
+
+
+def test_parse_items():
+    parser = TotalsOnlyParser()
+    data = (
+        "支給項目\n"
+        "本給 100\n"
+        "控除項目\n"
+        "健康保険料 10\n"
+        "支給合計 100\n"
+        "控除合計 10\n"
+        "差引支給額 90"
+    ).encode()
+    result = parser.parse(data)
+    assert any(i.name == "本給" and i.amount == 100 and i.category == "支給" for i in result.items)
+    assert any(i.name == "健康保険料" and i.amount == 10 and i.category == "控除" for i in result.items)
+
+
