@@ -82,7 +82,9 @@ def call_vision_api(content: bytes) -> str:
 
 
 class TotalsOnlyParser(BaseParser):
-    def parse(self, content: bytes) -> OCRResult:
+    def parse(self, content: bytes, mode: str = "simple") -> OCRResult:
+        assert mode == "simple", "TotalsOnlyParser only supports simple mode"
+
         text = call_vision_api(content)
         
         print("DEBUG OCR TEXT >>>>>>>>>>>>>>>>>>>>>>>>>>>>")
