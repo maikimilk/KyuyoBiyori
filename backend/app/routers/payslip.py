@@ -49,6 +49,7 @@ def to_schema(p: models.Payslip) -> PayslipRead:
 async def upload(
     file: UploadFile = File(...),
     year_month: str | None = Form(None),
+    mode: str = Form("simple"),
 ):
     print("DEBUG FILE SIZE", file.filename, file.content_type)
     content = await file.read()
@@ -57,8 +58,16 @@ async def upload(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
 
+    if mode == "simple":
+        selected_parser = parser
+    elif mode == "detailed":
+        from ..ocr.detailed_parser import DetailedParser
+        selected_parser = DetailedParser()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
     try:
-        result = parser.parse(content)
+        result = selected_parser.parse(content, mode=mode)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

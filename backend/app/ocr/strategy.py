@@ -13,5 +13,15 @@ class OCRResult:
     items: Optional[List[Item]] = None
 
 class BaseParser:
-    def parse(self, content: bytes) -> OCRResult:
+    def parse(self, content: bytes, mode: str = "simple") -> OCRResult:
+        """Parse payslip content.
+
+        Parameters
+        ----------
+        content: bytes
+            Raw file content to parse.
+        mode: str
+            Parsing mode. ``"simple"`` is the default and should keep
+            backward compatibility.
+        """
         raise NotImplementedError
