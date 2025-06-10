@@ -10,8 +10,11 @@ import {
   Progress,
   SimpleGrid,
   Stack,
-  Text
-  , useToast
+  Text,
+  useToast,
+  Switch,
+  FormControl,
+  FormLabel,
 } from '@chakra-ui/react';
 
 export default function Upload() {
@@ -21,16 +24,18 @@ export default function Upload() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [detailed, setDetailed] = useState(false);
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const upload = async (f: File, monthValue: string) => {
+  const upload = async (f: File, monthValue: string, mode: 'simple' | 'detailed') => {
     setProgress(0);
     setStatus('アップロード中...');
     setError('');
     const form = new FormData();
     form.append('file', f);
     form.append('year_month', monthValue);
+    form.append('mode', mode);
     try {
       const res = await fetch('/api/payslip/upload', { method: 'POST', body: form });
       if (res.ok) {
@@ -53,7 +58,7 @@ export default function Upload() {
 
   const handleFile = (f: File) => {
     setFile(f);
-    upload(f, month);
+    upload(f, month, detailed ? 'detailed' : 'simple');
   };
 
   const handleCancel = () => {
@@ -91,6 +96,10 @@ export default function Upload() {
         <Flex gap={2} align="center" flexWrap="wrap">
           <Input type="file" ref={inputRef} onChange={e => e.target.files && handleFile(e.target.files[0])} />
           <Input type="month" value={month} onChange={e => setMonth(e.target.value)} maxW="180px" />
+          <FormControl display="flex" alignItems="center" width="auto">
+            <FormLabel htmlFor="detailed" mb="0">詳細解析モード</FormLabel>
+            <Switch id="detailed" isChecked={detailed} onChange={e => setDetailed(e.target.checked)} />
+          </FormControl>
           <Button onClick={handleCancel}>取り消し</Button>
         </Flex>
         {progress > 0 && <Progress value={progress} />}
@@ -109,7 +118,7 @@ export default function Upload() {
             </SimpleGrid>
             <Flex gap={2} mt={2}>
               <Button colorScheme="teal" onClick={handleSave}>保存</Button>
-              <Button onClick={() => file && upload(file, month)}>再解析</Button>
+              <Button onClick={() => file && upload(file, month, detailed ? 'detailed' : 'simple')}>再解析</Button>
             </Flex>
           </Box>
         )}
