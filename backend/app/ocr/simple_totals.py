@@ -1,7 +1,6 @@
 import re
-import base64
 import os
-from google.cloud import vision
+from ..domain.item import Item
 from .strategy import BaseParser, OCRResult
 
 # allow matching of normal and full-width digits
@@ -22,6 +21,36 @@ def _clean(n: str) -> int:
     n = _normalize_digits(n)
     return int(n.replace(",", "").replace("，", "").replace("(", "-").replace(")", ""))
 
+# --- item parsing helpers ---
+LINE_ITEM_PAT = re.compile(r"^(.*?)\s*([\-\d０-９,，()]+)$")
+
+
+def _parse_items(text: str) -> list[Item]:
+    lines = text.splitlines()
+    items: list[Item] = []
+    mode = None  # None, "支給", "控除"
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if "支給項目" in line:
+            mode = "支給"
+            continue
+        if "控除項目" in line:
+            mode = "控除"
+            continue
+        if any(word in line for word in ["就業項目", "支給合計", "控除合計", "差引支給額"]):
+            mode = None
+            continue
+
+        if mode in ("支給", "控除"):
+            m = LINE_ITEM_PAT.match(line)
+            if m:
+                name, amount_str = m.group(1), _clean(m.group(2))
+                items.append(Item(name=name.strip(), amount=amount_str, category=mode))
+    return items
+
 def call_vision_api(content: bytes) -> str:
     """Return text from given image/PDF content using Google Cloud Vision API.
     
@@ -29,14 +58,10 @@ def call_vision_api(content: bytes) -> str:
     If not set, returns dummy OCR text (for offline testing).
     """
 
-    # 優先的に GOOGLE_APPLICATION_CREDENTIALS を使う → 環境変数がなければ fallback
+    # 優先的に GOOGLE_APPLICATION_CREDENTIALS を使う
+    # ない場合はテスト用に content を直接デコードして返す
     if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        # fallback: ダミーOCR結果
-        return """
-        支給合計 100000
-        控除合計 20000
-        差引支給額 80000
-        """
+        return content.decode("utf-8", errors="ignore")
 
     try:
         from google.cloud import vision
@@ -89,5 +114,8 @@ class TotalsOnlyParser(BaseParser):
             net = gross - deduction
         if any(v is None for v in (gross, deduction, net)):
             raise ValueError("Totals not found")
-        return OCRResult(gross=gross, deduction=deduction, net=net, text=text)
+
+        items = _parse_items(text)
+
+        return OCRResult(gross=gross, deduction=deduction, net=net, text=text, items=items)
 

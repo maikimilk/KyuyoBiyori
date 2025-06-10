@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from typing import List, Optional
+
+from ..domain.item import Item
 
 @dataclass
 class OCRResult:
@@ -7,6 +10,7 @@ class OCRResult:
     net: int
     text: str
     warnings: list[str] | None = None
+    items: Optional[List[Item]] = None
 
 class BaseParser:
     def parse(self, content: bytes) -> OCRResult:
