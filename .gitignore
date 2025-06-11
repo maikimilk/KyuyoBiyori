@@ -7,3 +7,5 @@ yarn.lock
 test.db
 .env.local
 gcp_key.json
+result.json
+payslip.jpg
