@@ -75,6 +75,7 @@ async def upload(
 
     return PayslipPreview(
         filename=file.filename,
+        type=result.type,
         gross_amount=result.gross,
         deduction_amount=result.deduction,
         net_amount=result.net,
@@ -110,6 +111,7 @@ def save(payload: PayslipCreate, db: Session = Depends(get_db)):
             category=item.category,
         )
         db.add(item_model)
+    print("DEBUG payload.type:", payload.type)
     print("DEBUG items from payload:", payload.items)
 
     db.commit()

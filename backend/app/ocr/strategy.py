@@ -9,6 +9,7 @@ class OCRResult:
     deduction: int
     net: int
     text: str
+    type: Optional[str] = None
     warnings: list[str] | None = None
     items: Optional[List[Item]] = None
 

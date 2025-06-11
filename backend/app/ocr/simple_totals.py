@@ -119,5 +119,12 @@ class TotalsOnlyParser(BaseParser):
 
         items = _parse_items(text)
 
-        return OCRResult(gross=gross, deduction=deduction, net=net, text=text, items=items)
+        return OCRResult(
+            type="salary",
+            gross=gross,
+            deduction=deduction,
+            net=net,
+            text=text,
+            items=items
+        )
 

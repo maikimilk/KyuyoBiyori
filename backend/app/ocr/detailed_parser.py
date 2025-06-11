@@ -33,6 +33,7 @@ Return the result strictly in the following JSON format:
 
 ```json
 {
+  type": "salary" | "bonus",
   "gross": int,
   "deduction": int,
   "net": int,
@@ -152,6 +153,7 @@ class DetailedParser(BaseParser):
             items = [Item(**it) for it in parsed["items"] if it.get("name")]
 
         return OCRResult(
+            type=parsed.get("type"),
             gross=int(parsed["gross"]),
             deduction=int(parsed["deduction"]),
             net=int(parsed["net"]),
