@@ -82,12 +82,18 @@ export default function Upload() {
         type: preview.type,
         gross_amount: preview.gross_amount,
         net_amount: preview.net_amount,
-      deduction_amount: preview.deduction_amount
+        deduction_amount: preview.deduction_amount,
+        items: preview.items ? preview.items.map((it: any) => ({
+          name: it.name,
+          amount: it.amount,
+          category: it.category
+        })) : []
       })
     });
-    setPreview(null);
-    setStatus(`保存しました: 総支給額${preview.gross_amount}円 手取り${preview.net_amount}円\n今月もよく頑張りましたね！`);
-  };
+  setPreview(null);
+  setStatus(`保存しました: 総支給額${preview.gross_amount}円 手取り${preview.net_amount}円\n今月もよく頑張りましたね！`);
+};
+
 
   return (
     <Layout>

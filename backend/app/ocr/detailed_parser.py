@@ -69,11 +69,31 @@ Net amount may be shown as 差引支給額 or 口座振込額 — treat them the
 Please analyze the image and return structured output accordingly.
 """
 
+# ------------ Gemini API 連携設定 ------------ #
 API_ENDPOINT = (
     "https://generativelanguage.googleapis.com/"
     "v1beta/models/gemini-2.0-flash:generateContent?key={key}"
 )
 
+# ---- 追加： safe_json_extract ----
+def safe_json_extract(raw_text: str) -> str:
+    """Remove code fences and leading 'json\n' if present"""
+    raw_text = raw_text.strip()
+    # Remove ```json ... ``` markers
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    elif raw_text.startswith("```"):
+        raw_text = raw_text[3:]
+
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+
+    # Skip to first '{'
+    json_start = raw_text.find("{")
+    if json_start >= 0:
+        raw_text = raw_text[json_start:]
+
+    return raw_text
 
 class DetailedParser(BaseParser):
     """Gemini-2.0-flash を用いた詳細パーサ"""
@@ -118,12 +138,8 @@ class DetailedParser(BaseParser):
         except (KeyError, IndexError) as exc:
             raise RuntimeError("Gemini API response shape changed") from exc
 
-        # ```json ``` ガード削除
-        raw_text = raw_text.strip()
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```", 2)[1].strip()
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3].rstrip()
+        # ---- safe_json_extract 使用 ----
+        raw_text = safe_json_extract(raw_text)
 
         # ---- JSON 解析 ----
         print("DEBUG GEMINI RAW TEXT:", raw_text)
@@ -141,5 +157,6 @@ class DetailedParser(BaseParser):
             net=int(parsed["net"]),
             text="[Gemini parsed]",
             warnings=None,
-            items=items,
+            items=[it.model_dump() for it in items] if items else None,
         )
+

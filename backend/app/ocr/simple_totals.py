@@ -86,7 +86,7 @@ class TotalsOnlyParser(BaseParser):
         assert mode == "simple", "TotalsOnlyParser only supports simple mode"
 
         text = call_vision_api(content)
-        
+
         print("DEBUG OCR TEXT >>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         print(text)
         print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")

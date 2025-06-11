@@ -17,6 +17,7 @@ import {
   FormControl,
   FormLabel,
 } from '@chakra-ui/react';
+import { Line, Bar, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,8 +28,9 @@ import {
   ArcElement,
   Tooltip,
   Legend,
+  ChartEvent,
+  ActiveElement,
 } from 'chart.js';
-import { Line, Bar, Pie } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
@@ -131,11 +133,17 @@ export default function Visualize() {
     [deduction, color],
   );
 
-  const onChartClick = (labels: string[]) => (event: any, elements: any[]) => {
-    if (!elements.length) return;
-    const idx = elements[0].index;
+
+  const onChartElementClick = (labels: string[]) => (
+    event: ChartEvent,
+    elements: ActiveElement[]
+  ) => {
+    if (!elements || elements.length === 0) return;
+    const idx = elements[0].index ?? -1;
     const label = labels[idx];
-    if (label) router.push(`/history?search=${label}`);
+    if (label) {
+      router.push(`/history?search=${label}`);
+    }
   };
 
   return (
@@ -167,24 +175,30 @@ export default function Visualize() {
         <TabPanels>
           <TabPanel>
             <Line
-              options={{ plugins: { legend: { display: showLabel } } }}
               data={netData}
-              onClick={onChartClick(netData.labels)}
+              options={{
+                plugins: { legend: { display: showLabel } },
+                onClick: onChartElementClick(netData.labels),
+              }}
             />
           </TabPanel>
           <TabPanel>
             <Line
-              options={{ plugins: { legend: { display: showLabel } } }}
               data={grossData}
-              onClick={onChartClick(grossData.labels)}
+              options={{
+                plugins: { legend: { display: showLabel } },
+                onClick: onChartElementClick(grossData.labels),
+              }}
             />
           </TabPanel>
           <TabPanel>
             {deduction ? (
               <Pie
-                options={{ plugins: { legend: { display: showLabel } } }}
                 data={breakdownData}
-                onClick={onChartClick(breakdownData.labels)}
+                options={{
+                  plugins: { legend: { display: showLabel } },
+                  onClick: onChartElementClick(breakdownData.labels),
+                }}
               />
             ) : (
               <Box>データなし</Box>
@@ -192,9 +206,11 @@ export default function Visualize() {
           </TabPanel>
           <TabPanel>
             <Bar
-              options={{ plugins: { legend: { display: showLabel } } }}
               data={bonusData}
-              onClick={onChartClick(bonusData.labels)}
+              options={{
+                plugins: { legend: { display: showLabel } },
+                onClick: onChartElementClick(bonusData.labels),
+              }}
             />
           </TabPanel>
         </TabPanels>
