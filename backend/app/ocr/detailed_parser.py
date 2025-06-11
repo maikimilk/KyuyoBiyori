@@ -158,6 +158,8 @@ class DetailedParser(BaseParser):
             deduction=int(parsed["deduction"]),
             net=int(parsed["net"]),
             text="[Gemini parsed]",
+            paid_leave_remaining_days=parsed.get("paid_leave_remaining_days"),
+            total_paid_leave_days=parsed.get("total_paid_leave_days"),
             warnings=None,
             items=[it.model_dump() for it in items] if items else None,
         )

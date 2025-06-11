@@ -42,6 +42,8 @@ def to_schema(p: models.Payslip) -> PayslipRead:
         gross_amount=p.gross_amount or 0,
         deduction_amount=p.deduction_amount or 0,
         net_amount=p.net_amount or 0,
+        paid_leave_remaining_days=p.paid_leave_remaining_days,
+        total_paid_leave_days=p.total_paid_leave_days,
     )
 
 
@@ -79,6 +81,8 @@ async def upload(
         gross_amount=result.gross,
         deduction_amount=result.deduction,
         net_amount=result.net,
+        paid_leave_remaining_days=result.paid_leave_remaining_days,
+        total_paid_leave_days=result.total_paid_leave_days,
         warnings=warnings_safe,
         items=result.items if result.items else [
             {"name": "支給合計", "amount": result.gross, "category": "支給"},
@@ -98,6 +102,8 @@ def save(payload: PayslipCreate, db: Session = Depends(get_db)):
         gross_amount=payload.gross_amount,
         deduction_amount=payload.deduction_amount,
         net_amount=payload.net_amount,
+        paid_leave_remaining_days=payload.paid_leave_remaining_days,
+        total_paid_leave_days=payload.total_paid_leave_days,
     )
     db.add(p)
     db.flush()

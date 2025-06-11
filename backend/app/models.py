@@ -15,6 +15,8 @@ class Payslip(Base):
     gross_amount = Column(Integer, nullable=True)
     net_amount = Column(Integer, nullable=True)
     deduction_amount = Column(Integer, nullable=True)
+    paid_leave_remaining_days = Column(Float, nullable=True)
+    total_paid_leave_days = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     items = relationship("PayslipItem", back_populates="payslip", cascade="all, delete-orphan")
 

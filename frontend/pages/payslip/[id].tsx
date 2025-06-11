@@ -115,6 +115,12 @@ export default function PayslipDetail() {
       ) : (
         <Stack spacing={4}>
           <Heading as="h1" size="lg">{data.filename}</Heading>
+          {data.paid_leave_remaining_days !== undefined && (
+            <Text>
+              残有給: {data.paid_leave_remaining_days ?? '-'}日 / 年休付与:
+              {data.total_paid_leave_days ?? '-'}日
+            </Text>
+          )}
           {data.warnings && data.warnings.length > 0 && (
             <Stack>
               {data.warnings.map((w: string, i: number) => (

@@ -125,6 +125,8 @@ class TotalsOnlyParser(BaseParser):
             deduction=deduction,
             net=net,
             text=text,
+            paid_leave_remaining_days=None,
+            total_paid_leave_days=None,
             items=items
         )
 

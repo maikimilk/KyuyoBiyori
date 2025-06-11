@@ -83,6 +83,8 @@ export default function Upload() {
         gross_amount: preview.gross_amount,
         net_amount: preview.net_amount,
         deduction_amount: preview.deduction_amount,
+        paid_leave_remaining_days: preview.paid_leave_remaining_days,
+        total_paid_leave_days: preview.total_paid_leave_days,
         items: preview.items ? preview.items.map((it: any) => ({
           name: it.name,
           amount: it.amount,
@@ -114,6 +116,12 @@ export default function Upload() {
         {preview && (
           <Box>
             {file && <Image src={URL.createObjectURL(file)} alt="preview" maxW="200px" />}
+            {preview.paid_leave_remaining_days !== undefined && (
+              <Text mt={2}>
+                残有給: {preview.paid_leave_remaining_days ?? '-'}日 / 年休付与:
+                {preview.total_paid_leave_days ?? '-'}日
+              </Text>
+            )}
             <SimpleGrid columns={2} spacing={2} mt={2}>
               {preview.items?.map((it: any, i: number) => (
                 <Box key={i} p={2} borderWidth="1px" borderRadius="md">
