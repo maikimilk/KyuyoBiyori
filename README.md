@@ -21,10 +21,18 @@
 ## ディレクトリ構成
 
 ```text
-backend/    # FastAPI アプリケーション
-  app/      # API実装
-  tests/    # pytest テスト
-frontend/   # Next.js フロントエンド
+backend/        # FastAPI アプリケーション
+  app/          # API 実装一式
+    routers/    # エンドポイント定義
+    ocr/        # OCR パーサ群
+    domain/     # 内部モデル
+    schemas/    # API スキーマ
+  tests/        # pytest テスト
+frontend/       # Next.js + Chakra UI フロントエンド
+  pages/        # 画面 (ダッシュボード/アップロード等)
+  components/   # 共有 React コンポーネント
+dev/            # 開発補助スクリプト
+docker-compose.yml
 ```
 
 
@@ -32,10 +40,10 @@ frontend/   # Next.js フロントエンド
 
 ## 技術スタック
 
-- **フロントエンド:**  
-  - Next.js (React)
-  - Tailwind CSS（スタイリッシュUI）
-  - Chart.js/Recharts（カラフルグラフ）
+- **フロントエンド:**
+  - Next.js (React) + TypeScript
+  - Chakra UI（スタイル/コンポーネント）
+  - Chart.js（グラフ描画）
 
 - **バックエンド:**  
   - **FastAPI（Python）**（拡張性・型安全・AI親和性）
@@ -229,7 +237,8 @@ type: "給与"
 
 - Next.js + Chakra UI によるフロントエンド画面（ダッシュボード、アップロード、履歴、設定）
 - FastAPI で実装した明細アップロード/保存/一覧取得 API
-- 明細データの統計取得、CSV/JSON エクスポート API
+- 明細データの統計取得 (summary / stats / breakdown) API
+- Gemini API を用いた詳細解析モード
 - 簡易設定更新 API（テーマカラーなどをメモリ上で管理）
 - SQLite と SQLAlchemy を用いたデータ保存
 - pytest による API テスト群
