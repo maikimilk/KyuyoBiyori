@@ -8,6 +8,8 @@ def test_parse_totals():
     assert result.gross == 200
     assert result.deduction == 50
     assert result.net == 150
+    assert result.paid_leave_remaining_days is None
+    assert result.total_paid_leave_days is None
 
 
 def test_parse_without_gross():

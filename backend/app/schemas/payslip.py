@@ -13,6 +13,8 @@ class PayslipCreate(BaseModel):
     gross_amount: int
     deduction_amount: int
     net_amount: int
+    paid_leave_remaining_days: Optional[float] = None
+    total_paid_leave_days: Optional[float] = None
     items: List[PayslipItemSchema] = []
 
 class PayslipPreview(BaseModel):

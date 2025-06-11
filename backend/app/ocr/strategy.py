@@ -10,6 +10,8 @@ class OCRResult:
     net: int
     text: str
     type: Optional[str] = None
+    paid_leave_remaining_days: Optional[float] = None
+    total_paid_leave_days: Optional[float] = None
     warnings: list[str] | None = None
     items: Optional[List[Item]] = None
 
