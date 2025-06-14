@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
-print("DEBUG GEMINI_API_KEY:", os.getenv("GEMINI_API_KEY"))
+# print("DEBUG GEMINI_API_KEY:", os.getenv("GEMINI_API_KEY"))
 
 # Ensure application logs show informative messages
 logging.basicConfig(
