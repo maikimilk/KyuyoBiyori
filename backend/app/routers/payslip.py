@@ -127,14 +127,30 @@ def save(payload: PayslipCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[PayslipRead])
-def list_all(db: Session = Depends(get_db)):
-    records = db.query(models.Payslip).all()
+def list_all(
+    year: int | None = None,
+    kind: str | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Payslip)
+    if year:
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        query = query.filter(models.Payslip.date >= start)
+        query = query.filter(models.Payslip.date <= end)
+    if kind:
+        query = query.filter(models.Payslip.type == kind)
+    records = query.all()
     return [to_schema(p) for p in records]
 
 
 @router.get("/list", response_model=list[PayslipRead])
-def list_alias(db: Session = Depends(get_db)):
-    return list_all(db)
+def list_alias(
+    year: int | None = None,
+    kind: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return list_all(year, kind, db)
 
 
 @router.get("/summary")
