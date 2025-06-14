@@ -1,278 +1,148 @@
-# 給与・賞与明細ビジュアライザーWebアプリ
+# 給与・賞与明細ビジュアライザー Web アプリ "KyuyoBiyori"
 
-## 概要
+## 全体の概要
 
-給与明細・賞与明細の画像やPDFをアップロードするだけで、  
-「基本給」「手当」「控除」「社会保険」など各項目を自動抽出。  
-手取り・額面・控除・賞与推移を**カラフル＆スタイリッシュなグラフで可視化**できるWebアプリです。
-
----
+KyuyoBiyori は、給与や賞与の明細画像・PDF をアップロードするだけで、
+金額や項目を自動で抽出し、手取り額や控除額の推移をグラフ化する Web アプリです。
+OCR には Google Cloud Vision API を利用し、抽出結果を FastAPI + SQLite
+(将来的には PostgreSQL) へ保存します。Next.js + Chakra UI のフロントエンドを備え、
+手軽に給与データを可視化できます。
 
 ## 特徴
 
-- **認証なし**ですぐ使える
-- **画像/PDFアップロード→Google Cloud Vision APIでOCR自動抽出**
-- 「基本給」「手当」「控除」「賞与」などの**自動カテゴリ分け**
-- 毎月・毎年の推移を**ワクワクするグラフで可視化**
-- **手動修正UI**で誤認識や追加項目も柔軟対応
-- **テスト駆動開発**（TDD）スタイル採用
-- **SQLite**を初期DBに、**将来はPostgreSQL等への移行も容易な設計**
+- 認証なしですぐ使えるシンプルな UI
+- 画像/PDF アップロード → Vision API で OCR 自動抽出
+- "支給" と "控除" を自動分類しグラフ化
+- 手動修正 UI で誤認識を補正可能
+- pytest によるテスト駆動開発
 
 ## ディレクトリ構成
 
 ```text
-backend/        # FastAPI アプリケーション
-  app/          # API 実装一式
-    routers/    # エンドポイント定義
-    ocr/        # OCR パーサ群
-    domain/     # 内部モデル
-    schemas/    # API スキーマ
-  tests/        # pytest テスト
-frontend/       # Next.js + Chakra UI フロントエンド
-  pages/        # 画面 (ダッシュボード/アップロード等)
-  components/   # 共有 React コンポーネント
-dev/            # 開発補助スクリプト
+backend/        FastAPI アプリケーション
+  app/          API 実装一式
+    routers/    エンドポイント
+    ocr/        OCR パーサ
+    domain/     ドメインモデル
+    schemas/    Pydantic スキーマ
+  tests/        pytest テスト
+frontend/       Next.js + Chakra UI フロントエンド
+  pages/        画面 (ダッシュボードなど)
+  components/   React コンポーネント
 docker-compose.yml
 ```
 
-
----
-
 ## 技術スタック
 
-- **フロントエンド:**
-  - Next.js (React) + TypeScript
-  - Chakra UI（スタイル/コンポーネント）
-  - Chart.js（グラフ描画）
-
-- **バックエンド:**  
-  - **FastAPI（Python）**（拡張性・型安全・AI親和性）
-    - pytestで自動テスト
-    - alembic+SQLAlchemyでDBマイグレーション
-  - **データベース:**  
-    - SQLite（開発・ローカル用）
-    - PostgreSQL（将来的な本番移行用・ORMで柔軟に対応）
-
-- **OCR:**  
-  - Google Cloud Vision API
-
----
+- **フロントエンド:** Next.js (React), TypeScript, Chakra UI, Chart.js
+- **バックエンド:** FastAPI, SQLAlchemy, Pydantic, pytest
+- **データベース:** SQLite (開発用) / PostgreSQL (将来移行想定)
+- **OCR:** Google Cloud Vision API
 
 ## I/O仕様
 
 ### 入力
-- 画像（JPEG/PNG） or PDFファイル（給与/賞与明細）
+- JPEG/PNG 画像または PDF の給与・賞与明細
 
 ### 出力
-- 時系列グラフ：額面、手取り、控除推移など
-- ダッシュボード：支給内訳・控除内訳・年収・賞与など
-- データはユーザーごと・月ごと・カテゴリごとに保存
+- 月次・年次の支給額/控除額/手取り額グラフ
+- 支給内訳・控除内訳の表
 
----
+## 写真からの割り振り例
 
-## 給与データの自動カテゴリ例
+アップロードされた明細から以下のような項目を自動抽出します。
 
-- **支給項目:** 基本給, 各種手当, 賞与, 残業代, その他
-- **控除項目:** 健康保険, 厚生年金, 雇用保険, 所得税, 住民税, その他
-- **集計:** 支給合計, 控除合計, 手取り, 口座振込額
-- **管理:** 年月, 明細種別, アップロード日
+- **支給項目:** 基本給, 各種手当, 賞与, 残業代 など
+- **控除項目:** 健康保険, 厚生年金, 雇用保険, 所得税, 住民税 など
+- **集計:** 支給合計, 控除合計, 差引支給額
 
----
+## アプリフロー
 
-## アプリ処理フロー
+1. 画像/PDF をアップロード
+2. Vision API で OCR を実行
+3. 抽出結果をパースして DB へ保存
+4. ダッシュボードでグラフ表示
+5. 必要に応じて手動編集
 
-1. **ファイルアップロード**（画像/PDF）
-2. **Google Cloud Vision APIでOCR**
-3. **給与明細の構造解析・主要項目抽出（自動パース）**
-4. **データベース（SQLite → PostgreSQL移行可）に保存**
-5. **ダッシュボードでグラフ表示**
-6. **手動編集UIで修正可能**
-7. **pytest等による自動テスト**
+## DBモデル設計
 
----
-
-## ローカル開発手順
-
-```bash
-# 1. リポジトリクローン
-git clone https://github.com/maikimilk/KyuyoBiyori.git
-cd KyuyoBiyori
-
-# 2. Python仮想環境（任意）
-python -m venv .venv
-source .venv/bin/activate
-
-# 3. Google Cloud Vision APIキーを.env.localへ
-NEXT_PUBLIC_GCLOUD_API_KEY=xxxxx  # フロントエンド用
-GCLOUD_API_KEY=xxxxx              # バックエンド用
-# 4. 依存インストール
-cd frontend && npm install && cd ..       # フロントエンド依存
-pip install -r backend/requirements.txt    # バックエンド依存
-# 5. 開発サーバ起動
-npm run dev           # フロントエンド
-uvicorn backend.app.main:app --reload   # バックエンド（FastAPI）
-
-# 6. ブラウザで http://localhost:3000 へアクセス
-
-# 7. テスト実行例
-pytest backend/tests/         # バックエンドテスト
-```
-
-## Docker Compose を使った起動
-
-Docker が利用できる環境であれば、フロントエンドとバックエンドをまとめて起動できます。
-
-```bash
-docker-compose up --build
-```
-
-- Frontend: <http://localhost:3000>
-- Backend: <http://localhost:8000>
-
-フロントエンドからバックエンド API へのアクセスにはリバースプロキシを利用しており
-`API_HOST` 環境変数で接続先を指定できます。Docker Compose 起動時は自動で
-`http://backend:8000` が設定されます。ローカルで個別に起動する場合は次のように
-環境変数を指定してフロントエンドを起動してください。
-
-```bash
-API_HOST=http://localhost:8000 npm run dev
-```
-
----
-
-## テスト
-
-* **pytest**でAPI・ロジック単体テスト
-* **Jest/React Testing Library**でフロントテスト
-
----
-
-## 今後の拡張性
-
-* DBマイグレーション: SQLite → PostgreSQLはSQLAlchemy/ORM経由で容易
-* AI/LLMによる項目抽出の自動化・精度向上
-* 明細フォーマットの柔軟追加（rules管理）
-* 認証/クラウド同期、CSVエクスポート、PWA化も順次対応
-
----
-
-## DBモデル設計（開発者が追記）
-
-> **このセクションに、DBテーブル構造・ORMモデルなどを記述します。
-> 例:**
+主要テーブルは次の通りです。（抜粋）
 
 ```python
-# models.py (SQLAlchemy例)
 class Payslip(Base):
     __tablename__ = 'payslips'
     id = Column(Integer, primary_key=True, index=True)
-    date = Column(Date, nullable=False)
-    type = Column(String, nullable=False)  # "給与" or "賞与"
-    base_salary = Column(Integer)
-    allowance = Column(Integer)
-    bonus = Column(Integer)
-    total_payment = Column(Integer)
-    total_deduction = Column(Integer)
-    net_income = Column(Integer)
-    health_insurance = Column(Integer)
-    pension = Column(Integer)
-    tax = Column(Integer)
-    ...
-    raw_text = Column(Text)
+    date = Column(Date, nullable=True)
+    type = Column(String, nullable=True)  # salary / bonus
+    filename = Column(String, nullable=False)
+    gross_amount = Column(Integer, nullable=True)
+    net_amount = Column(Integer, nullable=True)
+    deduction_amount = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    items = relationship("PayslipItem", back_populates="payslip", cascade="all, delete-orphan")
+
+class PayslipItem(Base):
+    __tablename__ = 'payslip_items'
+    id = Column(Integer, primary_key=True, index=True)
+    payslip_id = Column(Integer, ForeignKey('payslips.id'))
+    name = Column(String, nullable=False)
+    amount = Column(Integer, nullable=False)
+    category = Column(String, nullable=True)
 ```
 
----
+## API設計
 
-## API設計（開発者が追記）
+一部エンドポイントを紹介します。
 
-> **このセクションに、REST API設計・エンドポイント・サンプルリクエスト/レスポンス例を記述します。
-> 例:**
-
-### POST /api/payslip/upload
-
-給与明細画像/PDFのアップロード→解析リクエスト
-
-**リクエスト**
-
-```http
-POST /api/payslip/upload
-Content-Type: multipart/form-data
-
-file: [JPEG, PNG, PDF]
-date: 2025-05
-type: "給与"
-```
-
-**レスポンス**
-
-```json
-{
-  "id": 12,
-  "date": "2025-05-01",
-  "type": "給与",
-  "base_salary": 269000,
-  "allowance": 12860,
-  "total_payment": 356300,
-  "total_deduction": 53123,
-  "net_income": 303177,
-  "details": {
-    "health_insurance": 10528,
-    "pension": 25260,
-    "tax": 6210,
-    ...
-  }
-}
-```
-
----
-
-> **以降、DBモデルやAPI設計を都度追加・更新してください。**
-
----
+| メソッド | パス | 内容 |
+|---|---|---|
+| `POST` | `/api/payslip/upload` | 明細画像/PDF のアップロード・解析 |
+| `POST` | `/api/payslip/save` | 解析結果の保存 |
+| `GET`  | `/api/payslip/` | 登録済み明細の一覧取得 |
+| `GET`  | `/api/payslip/summary` | 今月と先月の比較など統計取得 |
+| `GET`  | `/api/payslip/stats` | 月別・年別集計データ取得 |
+| `GET`  | `/api/payslip/breakdown` | 年度別の項目内訳取得 |
+| `DELETE` | `/api/payslip/delete` | 明細の削除 |
 
 ## 開発状況
 
-### 現在の主な機能
+- フロントエンド画面（ダッシュボード・アップロード等）を実装済み
+- 基本的な API と SQLite 保存が動作
+- 詳細解析モードや設定更新 API を搭載
+- 今後は Vision API を用いた OCR 強化や認証機能を検討中
 
-- Next.js + Chakra UI によるフロントエンド画面（ダッシュボード、アップロード、履歴、設定）
-- FastAPI で実装した明細アップロード/保存/一覧取得 API
-- 明細データの統計取得 (summary / stats / breakdown) API
-- Gemini API を用いた詳細解析モード
-- 簡易設定更新 API（テーマカラーなどをメモリ上で管理）
-- SQLite と SQLAlchemy を用いたデータ保存
-- pytest による API テスト群
+## 開発指針
 
-### 次の開発アイデア
+- ORM で DB を抽象化し将来の移行を容易に
+- API には必ず自動テストを追加
+- フロント/バックエンドは明確に分離し OpenAPI ドキュメントを活用
+- UI/UX は "楽しく続けられる" 体験を重視
 
-- Google Cloud Vision API を用いた本格的な OCR 処理
-- 認証機能とマルチユーザー対応
-- ユーザー設定を DB に保存し永続化
-- 機械学習による項目分類精度の向上
-- グラフ UI の強化・インタラクティブ編集
+## ローカルでの開発方法
 
-## ライセンス
+```bash
+# 1. リポジトリ取得
+git clone https://github.com/maikimilk/KyuyoBiyori.git
+cd KyuyoBiyori
 
-MIT
+# 2. Python 仮想環境（任意）
+python -m venv .venv
+source .venv/bin/activate
+
+# 3. 依存関係インストール
+cd frontend && npm install && cd ..
+pip install -r backend/requirements.txt
+
+# 4. 環境変数に Vision API キーを設定
+export GOOGLE_APPLICATION_CREDENTIALS=path/to/gcp_key.json
+
+# 5. 開発サーバ起動
+npm --prefix frontend run dev
+uvicorn backend.app.main:app --reload
+```
+
+Docker Compose でもフロントエンド (port 3000) とバックエンド (port 8000) をまとめて起動できます。
 
 ---
 
-## 開発・設計方針メモ
-
-* DB層はORMで抽象化→DB移行も容易
-* 全APIエンドポイントは自動テストを網羅
-* フロント・バックエンド分離、OpenAPI対応
-* 新規明細フォーマットもrules追加で拡張可
-* UI/UXは「楽しく続けられる」体験最優先
-
----
-
-**給与明細を"楽しく可視化"して人生設計をサポート！
-開発メンバー・フィードバック・設計追記も歓迎です。**
-
-### 詳細解析モードの有効化
-
-Gemini API を利用した高精度解析を行う場合は、環境変数 `GEMINI_API_KEY` を
-設定した上でフロントエンドのアップロード画面で「詳細解析モード」をオンにし
-ます。アップロードフォームにあるトグルスイッチで切り替えると、フォーム送信時に `mode=detailed` が渡され、バックエンドでは
-`DetailedParser` が起動します。
+MIT License
