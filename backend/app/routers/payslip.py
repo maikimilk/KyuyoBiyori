@@ -1,11 +1,12 @@
 from datetime import datetime, date, timedelta
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import database, models
 from ..ocr.simple_totals import TotalsOnlyParser
 from ..ocr.strategy import BaseParser
-from ..schemas.payslip import PayslipCreate, PayslipPreview, PayslipRead
+from ..schemas.payslip import PayslipCreate, PayslipPreview, PayslipRead, PayslipItemSchema
 
 router = APIRouter()
 parser: BaseParser = TotalsOnlyParser()
@@ -319,4 +320,122 @@ def delete_payslip(payslip_id: int, db: Session = Depends(get_db)):
     db.delete(p)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.put("/update", response_model=PayslipRead)
+def update_payslip(payload: PayslipRead, db: Session = Depends(get_db)):
+    p = db.query(models.Payslip).get(payload.id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    p.filename = payload.filename
+    p.date = parse_date(payload.date)
+    p.type = payload.type
+    p.gross_amount = payload.gross_amount
+    p.deduction_amount = payload.deduction_amount
+    p.net_amount = payload.net_amount
+    p.paid_leave_remaining_days = payload.paid_leave_remaining_days
+    p.total_paid_leave_days = payload.total_paid_leave_days
+
+    # replace items
+    db.query(models.PayslipItem).filter(models.PayslipItem.payslip_id == p.id).delete()
+    for item in payload.items:
+        db.add(
+            models.PayslipItem(
+                payslip_id=p.id,
+                name=item.name,
+                amount=item.amount,
+                category=item.category,
+            )
+        )
+
+    db.commit()
+    db.refresh(p)
+    return to_schema(p)
+
+
+@router.post("/reparse", response_model=list[PayslipItemSchema])
+async def reparse_payslip(
+    file: UploadFile | None = File(None),
+    payslip_id: int | None = Form(None),
+    mode: str = Form("simple"),
+    db: Session = Depends(get_db),
+):
+    if file is None and payslip_id is None:
+        raise HTTPException(status_code=400, detail="file or payslip_id required")
+
+    if file is not None:
+        content = await file.read()
+    else:
+        p = db.query(models.Payslip).get(payslip_id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Not found")
+        try:
+            with open(p.filename, "rb") as f:
+                content = f.read()
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found")
+
+    if mode == "simple":
+        selected_parser = parser
+    elif mode == "detailed":
+        from ..ocr.detailed_parser import DetailedParser
+        selected_parser = DetailedParser()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
+    try:
+        result = selected_parser.parse(content, mode=mode)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    items = result.items if result.items else [
+        {"name": "支給合計", "amount": result.gross, "category": "支給"},
+        {"name": "控除合計", "amount": result.deduction, "category": "控除"},
+        {"name": "差引支給額", "amount": result.net, "category": "支給"},
+    ]
+    return items
+
+
+@router.get("/export")
+def export_payslips(format: str = "json", db: Session = Depends(get_db)):
+    records = db.query(models.Payslip).all()
+    data = [to_schema(p).model_dump() for p in records]
+
+    if format == "json":
+        return data
+
+    if format == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id",
+            "filename",
+            "date",
+            "type",
+            "gross_amount",
+            "deduction_amount",
+            "net_amount",
+            "paid_leave_remaining_days",
+            "total_paid_leave_days",
+        ])
+        for row in data:
+            writer.writerow([
+                row["id"],
+                row["filename"],
+                row["date"],
+                row["type"],
+                row["gross_amount"],
+                row["deduction_amount"],
+                row["net_amount"],
+                row["paid_leave_remaining_days"],
+                row["total_paid_leave_days"],
+            ])
+        output.seek(0)
+        headers = {"Content-Disposition": "attachment; filename=payslips.csv"}
+        return StreamingResponse(output, media_type="text/csv", headers=headers)
+
+    raise HTTPException(status_code=400, detail="Invalid format")
 
