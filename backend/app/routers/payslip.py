@@ -190,11 +190,19 @@ def payslip_stats(
     period: str = "monthly",
     target: str = "net",
     kind: str | None = None,
+    year: int | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(models.Payslip)
     if kind:
         query = query.filter(models.Payslip.type == kind)
+    if year is not None:
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        query = query.filter(
+            models.Payslip.date >= start_date,
+            models.Payslip.date <= end_date,
+        )
     records = query.all()
 
     grouped: dict[str, int] = {}
