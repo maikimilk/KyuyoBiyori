@@ -1,10 +1,11 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from typing import Any
 
 router = APIRouter()
 
 # simple in-memory store
-SETTINGS: dict[str, any] = {
+SETTINGS: dict[str, Any] = {
     "theme_color": "#319795",
     "dark_mode": False,
     "items": []
